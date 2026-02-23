@@ -77,7 +77,7 @@ def predict_video(video_path, model_weights, output_dir):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Pothole Detection Video Inference")
     parser.add_argument("--video", "-v", type=str, required=True, help="Path to input .MP4 video")
-    parser.add_argument("--weights", "-w", type=str, default="runs/detect/runs/detect/train/weights/best.pt", help="Path to trained YOLO model .pt file")
+    parser.add_argument("--weights", "-w", type=str, default="models/best_pothole.pt", help="Path to trained YOLO model .pt file")
     parser.add_argument("--out-dir", "-o", type=str, default="output/annotated_videos", help="Directory to save the final video")
     
     args = parser.parse_args()

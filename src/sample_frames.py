@@ -14,12 +14,16 @@ def sample_frames(input_dir, output_dir, num_samples):
         
     print(f"Found {len(all_frames)} total available frames.")
     
-    # Check for already sampled frames to prevent duplicates
+    # Check for already sampled frames (in staging or training) to prevent duplicates
     existing_sampled = set()
-    annotated_dir = os.path.join(output_dir, "annotated")
-    unannotated_dir = os.path.join(output_dir, "unannotated")
+    training_dir = os.path.join(output_dir, "training")
+    staging_dir = os.path.join(output_dir, "staging")
     
-    for check_dir in [annotated_dir, unannotated_dir]:
+    # Ensure directories exist
+    os.makedirs(training_dir, exist_ok=True)
+    os.makedirs(staging_dir, exist_ok=True)
+    
+    for check_dir in [training_dir, staging_dir]:
         if os.path.exists(check_dir):
             existing_files = glob.glob(os.path.join(check_dir, "**/*.jpg"), recursive=True)
             for f in existing_files:
@@ -49,20 +53,7 @@ def sample_frames(input_dir, output_dir, num_samples):
     # Randomly select frames
     sampled_frames = random.sample(available_frames, samples_to_take)
     
-    # Determine the next batch folder (e.g., batch_1, batch_2)
-    batch_num = 1
-    while True:
-        unann_batch = os.path.join(unannotated_dir, f"batch_{batch_num}")
-        ann_batch = os.path.join(annotated_dir, f"batch_{batch_num}")
-        if os.path.exists(unann_batch) or os.path.exists(ann_batch):
-            batch_num += 1
-        else:
-            break
-            
-    batch_images_dir = os.path.join(unannotated_dir, f"batch_{batch_num}", "images")
-    os.makedirs(batch_images_dir, exist_ok=True)
-    
-    print(f"Randomly selected {samples_to_take} frames. Copying to {batch_images_dir}...")
+    print(f"Randomly selected {samples_to_take} frames. Copying to {staging_dir}...")
     
     copied = 0
     for frame_path in sampled_frames:
@@ -70,7 +61,7 @@ def sample_frames(input_dir, output_dir, num_samples):
         filename = os.path.basename(frame_path)
         
         new_filename = f"{video_name}_{filename}"
-        dest_path = os.path.join(batch_dir, new_filename)
+        dest_path = os.path.join(staging_dir, new_filename)
         
         shutil.copy2(frame_path, dest_path)
         copied += 1
@@ -78,8 +69,8 @@ def sample_frames(input_dir, output_dir, num_samples):
         if copied % 50 == 0:
             print(f"Copied {copied}/{samples_to_take}...")
             
-    print(f"Successfully copied {copied} frames to {batch_dir}.")
-    print(f"You can now drag the images from '{batch_dir}' directly into MakeSense.ai for annotation.")
+    print(f"\nSuccessfully copied {copied} new frames to {staging_dir}.")
+    print("You can now run 'python src/generate_label_studio_tasks.py' to auto-annotate them!")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Randomly sample frames for YOLO annotation.")

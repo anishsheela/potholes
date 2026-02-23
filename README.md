@@ -62,37 +62,44 @@ python src/generate_map.py -i output/filtered_route_data.csv -o output/map.html
 
 ---
 
-## 🧠 Phase 2: Custom YOLOv8 Pothole Detection
-
-Once Phase 1 is complete, you will have a massive folder (`output/filtered_frames/`) of clean, daylight, forward-facing road images.
-
-**1. Sample an Annotation Batch:**  
-Extract 150 random images into a new "to-do" folder (`dataset/unannotated/batch_X/images/`). The script keeps a history, so you will *never* sample the same frame twice.
-```bash
-python src/sample_frames.py -i output/filtered_frames -o dataset -n 150
-```
-
-**2. Manual Annotation:**
-1. Open [MakeSense.ai](https://www.makesense.ai/) in your browser.
-2. Drag and drop the 150 frames from your new batch folder.
-3. Draw tight bounding boxes around all visible potholes. *(If a frame has no potholes, leave it completely blank! This serves as a vital negative background sample).*
-4. Export the annotations in YOLO format (`.txt` files).
-5. Place the exported files into a new `labels/` directory next to your `images/` directory.
-6. Move the completed batch folder from `dataset/unannotated/` into `dataset/annotated/`.
-
-**3. Train the Model!**  
-The training script will seamlessly crawl your `annotated/` directory, combine all your batches, generate the validation split, and fine-tune a pre-trained YOLOv8 Nano model. It automatically utilizes PyTorch hardware acceleration (`MPS` for Mac or `CUDA` for Nvidia) if available.
-```bash
-python src/train_yolo.py --data-dir dataset --epochs 50
-```
-
-**4. Run Video Inference:**  
-Test your custom AI on a raw `.MP4` file. It will draw boxes around detected potholes and spit out a new, annotated video.
-```bash
-python src/predict_video.py -v videos/YOUR_VIDEO.MP4
-```
-
-Alternatively, you can test the model directly against a raw directory of images:
-```bash
-python src/predict_frames.py -i output/filtered_frames/YOUR_VIDEO_FOLDER
-```
+## 🧠 Phase 2: Custom YOLOv8 Active Learning
+ 
+ Once Phase 1 is complete, you will have a massive folder (`output/filtered_frames/`) of clean, daylight, forward-facing road images. We will use a semi-automated Active Learning loop with Label Studio to train a custom Pothole detector.
+ 
+ **1. Sample an Annotation Batch:**  
+ Extract 150 random images into your flat staging area (`dataset/staging/`). The script keeps a history, so you will *never* sample the same frame twice.
+ ```bash
+ python src/sample_frames.py -i output/filtered_frames -o dataset -n 150
+ ```
+ 
+ **2. Auto-Annotate:**
+ Feed your new staging images through your best model to generate pre-drawn bounding boxes.
+ ```bash
+ python src/generate_label_studio_tasks.py --weights models/best_pothole.pt
+ ```
+ 
+ **3. Manual Correction (Label Studio):**
+ 1. Open Label Studio (Docker). Ensure Local Storage is mapped to your `dataset/staging/` folder.
+ 2. Click **Sync Storage** to see the new raw images.
+ 3. Click **Import** and upload `dataset/label_studio_tasks.json`.
+ 4. Correct the bounding boxes in the UI, then click **Export** -> **YOLO flow**.
+ 
+ **4. Sync Training Data:**
+ Automatically pair your exported `.txt` labels with the raw images sitting in staging, and permanently move them both to the `dataset/training/` folder. 
+ ```bash
+ python src/sync_label_studio_export.py -z ~/Downloads/your_export.zip
+ ```
+ 
+ **5. Train the Model!**  
+ The training script continuously crawls your growing `dataset/training/` directory, generates the necessary validation splits, and fine-tunes the YOLOv8 model using PyTorch hardware acceleration (`MPS` for Mac).
+ ```bash
+ python src/train_yolo.py --data-dir dataset --epochs 50
+ ```
+ 
+ **6. Run Video Inference:**  
+ Test your custom AI on a raw `.MP4` file. It will draw boxes around detected potholes and spit out a new, annotated video.
+ ```bash
+ python src/predict_video.py -v videos/YOUR_VIDEO.MP4
+ ```
+ 
+ *Repeat steps 1-5 iteratively! With each cycle, the AI's auto-annotations get smarter and your manual correction time drastically decreases.*

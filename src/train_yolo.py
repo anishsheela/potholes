@@ -11,7 +11,7 @@ def create_dataset_split(base_dir, split_ratio=0.8):
     Takes nested annotated/batch_X/images/ and labels/ directories and 
     combines them into a single train/ and val/ split required by YOLO.
     """
-    annotated_dir = os.path.join(base_dir, 'annotated')
+    training_dir = os.path.join(base_dir, 'training')
     
     split_dir = os.path.join(base_dir, 'split')
     train_images = os.path.join(split_dir, 'images', 'train')
@@ -23,12 +23,12 @@ def create_dataset_split(base_dir, split_ratio=0.8):
     for p in [train_images, val_images, train_labels, val_labels]:
         os.makedirs(p, exist_ok=True)
         
-    all_images = glob.glob(os.path.join(annotated_dir, '**', 'images', '*.jpg'), recursive=True)
+    all_images = glob.glob(os.path.join(training_dir, 'images', '*.jpg'))
     if not all_images:
-        print(f"Error: No completed images found in {annotated_dir}")
+        print(f"Error: No completed images found in {training_dir}")
         return None
         
-    print(f"Found {len(all_images)} total images across all annotated batches for training.")
+    print(f"Found {len(all_images)} total images in {training_dir} for training.")
     
     # Process labels and handle negative samples (backgrounds)
     valid_data = []
@@ -38,10 +38,9 @@ def create_dataset_split(base_dir, split_ratio=0.8):
     for img_path in all_images:
         base_name = os.path.splitext(os.path.basename(img_path))[0]
         
-        # Path logic: dataset/annotated/batch_X/images/img.jpg
-        # Label path: dataset/annotated/batch_X/labels/img.txt
-        batch_dir = os.path.dirname(os.path.dirname(img_path))
-        label_dir = os.path.join(batch_dir, 'labels')
+        # Path logic: dataset/training/images/img.jpg
+        # Label path: dataset/training/labels/img.txt
+        label_dir = os.path.join(training_dir, 'labels')
         label_path = os.path.join(label_dir, f"{base_name}.txt")
         
         # Ensure labels folder exists if creating negative samples
@@ -99,14 +98,14 @@ def create_yaml(split_dir, yaml_path):
         
     print(f"Created YOLO dataset configuration at {yaml_path}")
 
-def train_model(yaml_path, epochs, imgsz):
+def train_model(yaml_path, epochs, imgsz, base_weights, save_path):
     """
-    Loads YOLOv8n and trains it on the custom dataset.
+    Loads YOLO configuration and trains it on the custom dataset.
     """
     print("\n--- Starting YOLOv8 Training ---")
-    print("Initializing YOLOv8 Nano model...")
-    # Load a pre-trained Nano model
-    model = YOLO('yolov8n.pt') 
+    print(f"Initializing YOLO model from weights: {base_weights}...")
+    # Load the requested pre-trained or custom model
+    model = YOLO(base_weights) 
     
     import torch
     device = 'mps' if torch.backends.mps.is_available() else 'cpu'
@@ -123,20 +122,43 @@ def train_model(yaml_path, epochs, imgsz):
         exist_ok=True # Overwrite previous training runs in this folder for simplicity
     )
     
-    print("\n--- Training Complete! ---")
-    print(f"The best model weights are saved at: runs/detect/train/weights/best.pt")
-    print("You can now use predict_video.py to test it out.")
+    # Dynamically locate the best.pt file since ultralytics file pathing can be unpredictable
+    import glob
+    weight_files = glob.glob('runs/**/weights/best.pt', recursive=True)
+    if weight_files:
+        weight_files.sort(key=os.path.getmtime, reverse=True)
+        yolo_best_weights = weight_files[0]
+        
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        shutil.copy2(yolo_best_weights, save_path)
+        print("\n--- Training Complete! ---")
+        print(f"Successfully copied the best model weights safely to: {save_path}")
+        print("You can now use predict_video.py to test it out.")
+    else:
+        print("\n--- Training Finished, but could not locate best weights to copy! ---")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--data-dir", type=str, default="dataset", help="Base dataset directory containing images/ and labels/")
     parser.add_argument("--epochs", type=int, default=50, help="Number of training epochs (default: 50)")
     parser.add_argument("--imgsz", type=int, default=640, help="Image size for training (default: 640)")
+    parser.add_argument("--weights", type=str, default=None, help="Explicitly force init weights (e.g., yolov8n.pt). Otherwise auto-resumes from models/best_pothole.pt")
     
     args = parser.parse_args()
+    
+    custom_weights_path = 'models/best_pothole.pt'
+    
+    if args.weights:
+        weights_to_use = args.weights
+    elif os.path.exists(custom_weights_path):
+        weights_to_use = custom_weights_path
+        print(f"Found existing custom model at {custom_weights_path}. Will resume training from it.")
+    else:
+        weights_to_use = "yolov8n.pt"
+        print(f"No existing custom model found. Starting fresh from base {weights_to_use}...")
     
     split_dir = create_dataset_split(args.data_dir)
     if split_dir:
         yaml_path = os.path.join(args.data_dir, 'pothole.yaml')
         create_yaml(split_dir, yaml_path)
-        train_model(yaml_path, args.epochs, args.imgsz)
+        train_model(yaml_path, args.epochs, args.imgsz, weights_to_use, custom_weights_path)

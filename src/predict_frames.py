@@ -67,7 +67,7 @@ def predict_frames(input_dir, model_weights, output_dir):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Pothole Detection Frame Inference")
     parser.add_argument("--input", "-i", type=str, required=True, help="Path to input directory of frames")
-    parser.add_argument("--weights", "-w", type=str, default="runs/detect/runs/detect/train/weights/best.pt", help="Path to trained YOLO model .pt file")
+    parser.add_argument("--weights", "-w", type=str, default="models/best_pothole.pt", help="Path to trained YOLO model .pt file")
     parser.add_argument("--out-dir", "-o", type=str, default="output/annotated_frames", help="Directory to save the final images")
     
     args = parser.parse_args()
