@@ -5,14 +5,16 @@ import os
 import glob
 import pandas as pd
 import re
+import yaml
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from tqdm import tqdm
 
-def extract_data_from_frame(frame_path):
+def extract_data_from_frame(args):
     """
     Worker function to process a single frame.
-    Reads the image, crops exact text rectangles, runs OCR, and returns the data dictionary.
+    Reads the image, crops exact text rectangles based on config, runs OCR, and returns the data dictionary.
     """
+    frame_path, camera_config = args
     
     # Extract timestamp from filename (e.g., frame_0001.0s.jpg -> 1.0)
     filename = os.path.basename(frame_path)
@@ -22,56 +24,79 @@ def extract_data_from_frame(frame_path):
     # Determine the video name for groupings
     video_name = os.path.basename(os.path.dirname(frame_path))
     
+    if not camera_config:
+        print(f"Warning: No config found for camera folder. Skipping {frame_path}")
+        return None
+        
     # Read image
     img = cv2.imread(frame_path)
     if img is None:
+        print(f"Failed to read image {frame_path}")
         return None
         
     height, width, _ = img.shape
     
-    # User provided EXACT pixel coordinates
-    # Top Left (26,1858) Bottom Right (753,1934) - Date/Time
-    # Top Left (1500,1848) Bottom Right (2404,1935) - Speed/GPS
+    # Extract config parameters
+    date_coords = camera_config['date_roi']['coords'] # [y1, y2, x1, x2]
+    gps_coords = camera_config['gps_roi']['coords']
     
-    # Numpy slicing is [y1:y2, x1:x2]
-    # 1. Date/Time ROI (Left side)
-    date_time_box = img[1858:1934, 26:753]
+    # 1. Date/Time ROI
+    y1, y2, x1, x2 = date_coords
+    date_time_box = img[y1:y2, x1:x2]
     
-    # 2. GPS/Speed ROI (Right side)
-    gps_speed_box = img[1848:1935, 1500:2404]
+    # 2. GPS/Speed ROI
+    y1, y2, x1, x2 = gps_coords
+    gps_speed_box = img[y1:y2, x1:x2]
     
     # Run OCR independently on both tiny, high-contrast boxes
-    # psm 7 implies single line of text
     dt_text = pytesseract.image_to_string(date_time_box, config='--psm 7').strip()
     gps_speed_str = pytesseract.image_to_string(gps_speed_box, config='--psm 7').strip()
     
-    # Parse Left Side (Date & Time)
+    # --- Parse left side (Date & Time) using Config Regex ---
     date_str = ""
     time_str = ""
+    date_match = re.search(camera_config['date_roi']['regex'], dt_text, re.IGNORECASE)
+    if date_match:
+        # If the regex grouped date and time perfectly, use them. Or fallback to split.
+        try:
+            date_str = date_match.group('date')
+        except IndexError:
+            date_str = date_match.group(1) # fallback if group wasn't named
+            
+    # For time string, simple heuristic fallback if regex failed to capture it explicitly
     parts = dt_text.split()
     for text in parts:
-        if "-" in text and len(text) > 8:
-            date_str = text
-        elif ":" in text and len(text) > 5:
+        if ":" in text and len(text) > 5:
             time_str = text
-        
+            
+    # --- Parse right side (Speed & GPS) using Config Regex ---
     speed = None
     lat = None
     lon = None
     
-    gps_speed_str = gps_speed_str.strip().replace(" ", "")
+    gps_speed_str_clean = gps_speed_str.strip().replace(" ", "")
+    gps_match = re.search(camera_config['gps_roi']['regex'], gps_speed_str_clean, re.IGNORECASE)
     
-    speed_match = re.search(r"(\d+)km/h", gps_speed_str, re.IGNORECASE)
-    if speed_match:
-        speed = speed_match.group(1)
+    if gps_match:
+        grouped_dict = gps_match.groupdict()
+        if 'speed' in grouped_dict: speed = grouped_dict['speed']
+        if 'lat' in grouped_dict: lat = grouped_dict['lat']
+        if 'lon' in grouped_dict: lon = grouped_dict['lon']
         
-    lon_match = re.search(r"[EW](\d+\.\d+)", gps_speed_str, re.IGNORECASE)
-    lat_match = re.search(r"[NS](\d+\.\d+)", gps_speed_str, re.IGNORECASE)
-    
-    if lon_match:
-        lon = lon_match.group(1)
-    if lat_match:
-        lat = lat_match.group(1)
+    # Fallback to old heuristic if regex didn't perfectly match
+    if speed is None:
+        speed_match = re.search(r"(\d+)km/h", gps_speed_str_clean, re.IGNORECASE)
+        if speed_match:
+            speed = speed_match.group(1)
+        elif "--km/h" in gps_speed_str_clean.lower() or "---km/h" in gps_speed_str_clean.lower():
+            speed = 0
+            
+    if lon is None:
+        lon_match = re.search(r"[EW](\d+\.\d+)", gps_speed_str_clean, re.IGNORECASE)
+        if lon_match: lon = lon_match.group(1)
+    if lat is None:
+        lat_match = re.search(r"[NS](\d+\.\d+)", gps_speed_str_clean, re.IGNORECASE)
+        if lat_match: lat = lat_match.group(1)
         
     return {
         "Video": video_name,
@@ -81,14 +106,18 @@ def extract_data_from_frame(frame_path):
         "Speed_kmh": speed,
         "Latitude": lat,
         "Longitude": lon,
-        "Raw_OCR": gps_speed_str
+        "Raw_OCR": gps_speed_str,
+        "Frame_Path": frame_path
     }
 
-def process_frames(frames_dir, output_csv):
+def process_frames(frames_dir, output_csv, config_path, out_invalid=None):
     """
     Discovers new frames and distributes the OCR workload using ProcessPoolExecutor.
     If output_csv exists, it skips videos that have already been processed and appends new data.
     """
+    with open(config_path, 'r') as f:
+        master_config = yaml.safe_load(f)
+        
     processed_videos = set()
     existing_df = None
     
@@ -111,27 +140,34 @@ def process_frames(frames_dir, output_csv):
         print(f"No frames found in {frames_dir}")
         return
         
-    # 3. Filter out frames from already processed videos
-    new_frame_files = []
+    # 4. Filter out frames from already processed videos and package args
+    new_frame_args = []
     for frame_path in all_frame_files:
         video_name = os.path.basename(os.path.dirname(frame_path))
+        # Path structure is processed_data/frames/anish/video1/frame.jpg
+        camera_name = os.path.basename(os.path.dirname(os.path.dirname(frame_path)))
+        
         if video_name not in processed_videos:
-            new_frame_files.append(frame_path)
+            camera_config = master_config['cameras'].get(camera_name)
+            if not camera_config:
+                print(f"Warning: Dropping frame from unknown camera folder '{camera_name}' (Not mapped in config.yaml).")
+                continue
+            new_frame_args.append((frame_path, camera_config))
             
-    if not new_frame_files:
-        print(f"All {len(all_frame_files)} frames belong to already processed videos. Skipping OCR.")
+    if not new_frame_args:
+        print(f"All {len(all_frame_files)} frames belong to already processed videos, or are missing config maps. Skipping OCR.")
         return
 
-    print(f"Found {len(new_frame_files)} NEW frames to process.")
-    print(f"Starting Multi-Core OCR Processing...")
+    print(f"Found {len(new_frame_args)} NEW frames to process.")
+    print(f"Starting Multi-Core Config-Driven OCR Processing...")
     
     new_results_data = []
 
     # 4. Use multi-processing to run CPU-bound OCR in parallel on new frames only
     with ProcessPoolExecutor() as executor:
-        futures = {executor.submit(extract_data_from_frame, path): path for path in new_frame_files}
+        futures = {executor.submit(extract_data_from_frame, args): args for args in new_frame_args}
         
-        with tqdm(total=len(new_frame_files), desc="Running OCR", unit="frame") as pbar:
+        with tqdm(total=len(new_frame_args), desc="Running OCR", unit="frame") as pbar:
             for future in as_completed(futures):
                 try:
                     result = future.result()
@@ -149,10 +185,19 @@ def process_frames(frames_dir, output_csv):
     # 5. Save/Append to CSV
     new_df = pd.DataFrame(new_results_data)
     
+    # Store the invalid GPS rows before dropping them
+    invalid_gps_df = new_df[new_df['Latitude'].isna() | new_df['Longitude'].isna()].copy()
+    
     # Filter out empty GPS points from new data
     initial_len = len(new_df)
     new_df = new_df.dropna(subset=['Latitude', 'Longitude'])
     print(f"\nFiltered {initial_len - len(new_df)} new frames missing valid GPS coordinates.")
+    
+    if out_invalid and not invalid_gps_df.empty:
+        os.makedirs(os.path.dirname(out_invalid), exist_ok=True)
+        # Option to only save relevant info for review
+        invalid_gps_df[['Video', 'Video_Seconds', 'Frame_Path', 'Raw_OCR']].to_csv(out_invalid, index=False)
+        print(f"Saved {len(invalid_gps_df)} rows with invalid GPS data to {out_invalid}")
     
     # Combine with existing data if present
     if existing_df is not None and not existing_df.empty:
@@ -172,8 +217,12 @@ def process_frames(frames_dir, output_csv):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input", "-i", type=str, default="output/frames", help="Directory containing extracted frames")
-    parser.add_argument("--output", "-o", type=str, default="output/route_data.csv", help="Output CSV file path")
+    parser.add_argument("--camera", type=str, required=True, help="Name of the camera folder (e.g. anish)")
+    parser.add_argument("--config", "-c", type=str, default="config.yaml", help="Path to camera mapping config.yaml")
     args = parser.parse_args()
     
-    process_frames(args.input, args.output)
+    input_dir = os.path.join("processed_data", "frames", args.camera)
+    output_csv = os.path.join("processed_data", "route_data", f"{args.camera}.csv")
+    out_invalid = os.path.join("processed_data", "route_data", f"invalid_gps_{args.camera}.csv")
+    
+    process_frames(input_dir, output_csv, args.config, out_invalid)

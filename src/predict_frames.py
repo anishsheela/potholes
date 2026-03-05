@@ -2,6 +2,7 @@ import cv2
 import argparse
 import os
 import glob
+import yaml
 from ultralytics import YOLO
 from tqdm import tqdm
 
@@ -44,10 +45,10 @@ def predict_frames(input_dir, model_weights, output_dir):
             continue
             
         # Run YOLO inference
-        # conf=0.5 means only draw boxes if the AI is >50% sure it's a pothole
+        # conf=0.5 means only draw boxes/masks if the AI is >50% sure it's a pothole
         results = model.predict(img, conf=0.5, verbose=False)
         
-        # The result object has a plot() method that draws the boxes directly on the frame
+        # The result object has a plot() method that draws the boxes AND masks directly on the frame
         annotated_frame = results[0].plot()
         
         potholes_in_frame = len(results[0].boxes)
@@ -61,14 +62,14 @@ def predict_frames(input_dir, model_weights, output_dir):
         
     print("\n--- Inference Complete ---")
     print(f"Frames Processed:  {len(image_paths)}")
-    print(f"Potholes Detected: {potholes_detected} (Total boxes drawn across all frames)")
+    print(f"Potholes Detected: {potholes_detected} (Total detections across all frames)")
     print(f"Saved Annotated Frames to: {final_output_dir}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Pothole Detection Frame Inference")
     parser.add_argument("--input", "-i", type=str, required=True, help="Path to input directory of frames")
     parser.add_argument("--weights", "-w", type=str, default="models/best_pothole.pt", help="Path to trained YOLO model .pt file")
-    parser.add_argument("--out-dir", "-o", type=str, default="output/annotated_frames", help="Directory to save the final images")
+    parser.add_argument("--out-dir", "-o", type=str, default="processed_data/annotated_frames", help="Directory to save the final images")
     
     args = parser.parse_args()
     

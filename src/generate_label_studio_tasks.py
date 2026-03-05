@@ -18,7 +18,7 @@ def generate_label_studio_tasks(image_dir, model_path, output_json, project_root
         return
         
     if not os.path.exists(model_path):
-        print(f"Error: Model not found at {model_path}. Did the Bootstrapper finish training?")
+        print(f"Error: Model not found at {model_path}. Please provide a trained model.")
         return
         
     print(f"Loading YOLO model from {model_path}...")
@@ -98,7 +98,7 @@ def generate_label_studio_tasks(image_dir, model_path, output_json, project_root
                 })
                 
             task["predictions"].append({
-                "model_version": "bootstrapper-v1",
+                "model_version": "custom-v1",
                 "score": float(boxes.conf.mean().item()), 
                 "result": prediction_results
             })
@@ -123,11 +123,20 @@ def generate_label_studio_tasks(image_dir, model_path, output_json, project_root
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate Label Studio pre-annotations from YOLO weights")
     parser.add_argument("--image-dir", "-i", type=str, default="dataset/staging", help="Folder containing images to auto-annotate")
-    parser.add_argument("--weights", "-w", type=str, default="models/bootstrapper.pt", help="Path to YOLO weights to use")
+    parser.add_argument("--weights", "-w", type=str, default="models/best_pothole.pt", help="Path to YOLO weights to use")
     parser.add_argument("--out", "-o", type=str, default="dataset/label_studio_tasks.json", help="Output JSON map")
     parser.add_argument("--root", "-r", type=str, default=os.getcwd(), help="Absolute path to project root (for Local Storage URLs)")
     parser.add_argument("--docker-mount", "-m", type=str, default="/label-studio/mydata", help="Path where the project root is mounted inside the Docker container")
+    parser.add_argument("--camera", "-c", type=str, help="Specific camera subfolder to process (e.g. anish)")
     
     args = parser.parse_args()
     
-    generate_label_studio_tasks(args.image_dir, args.weights, args.out, os.path.abspath(args.root), args.docker_mount)
+    img_dir = args.image_dir
+    out_json = args.out
+    
+    if args.camera:
+        img_dir = os.path.join(img_dir, args.camera)
+        if out_json == "dataset/label_studio_tasks.json":
+            out_json = f"dataset/label_studio_tasks_{args.camera}.json"
+    
+    generate_label_studio_tasks(img_dir, args.weights, out_json, os.path.abspath(args.root), args.docker_mount)

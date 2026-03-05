@@ -53,10 +53,10 @@ def predict_video(video_path, model_weights, output_dir):
                 break
                 
             # Run YOLO inference
-            # conf=0.5 means only draw boxes if the AI is >50% sure it's a pothole
+            # conf=0.5 means only draw boxes/masks if the AI is >50% sure it's a pothole
             results = model.predict(frame, conf=0.5, verbose=False)
             
-            # The result object has a plot() method that draws the boxes directly on the frame
+            # The result object has a plot() method that draws the boxes AND masks directly on the frame
             annotated_frame = results[0].plot()
             
             potholes_in_frame = len(results[0].boxes)
@@ -71,14 +71,14 @@ def predict_video(video_path, model_weights, output_dir):
     
     print("\n--- Inference Complete ---")
     print(f"Frames Processed:  {frames_processed}")
-    print(f"Potholes Detected: {potholes_detected} (Total boxes drawn across all frames)")
+    print(f"Potholes Detected: {potholes_detected} (Total detections across all frames)")
     print(f"Saved Annotated Video to: {output_path}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Pothole Detection Video Inference")
     parser.add_argument("--video", "-v", type=str, required=True, help="Path to input .MP4 video")
     parser.add_argument("--weights", "-w", type=str, default="models/best_pothole.pt", help="Path to trained YOLO model .pt file")
-    parser.add_argument("--out-dir", "-o", type=str, default="output/annotated_videos", help="Directory to save the final video")
+    parser.add_argument("--out-dir", "-o", type=str, default="processed_data/annotated_videos", help="Directory to save the final video")
     
     args = parser.parse_args()
     

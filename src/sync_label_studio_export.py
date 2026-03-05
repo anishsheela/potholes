@@ -7,7 +7,7 @@ import argparse
 def sync_label_studio_export(zip_path, dataset_dir="dataset"):
     """
     Takes a YOLO format ZIP export from Label Studio.
-    1. Extracts the labels.
+    1. Extracts the labels. Support BBox or Polygon formats.
     2. Finds the corresponding original images in dataset/unannotated/.
     3. Moves both the label and the image together into a new dataset/annotated/batch_X/ folder.
     """
@@ -77,13 +77,17 @@ def sync_label_studio_export(zip_path, dataset_dir="dataset"):
             if found_images:
                 original_img_path = found_images[0]
                 
+                rel_path = os.path.relpath(original_img_path, staging_dir)
+                
                 # Move the Image to training/
-                dest_img_path = os.path.join(target_images, os.path.basename(original_img_path))
+                dest_img_path = os.path.join(target_images, rel_path)
+                os.makedirs(os.path.dirname(dest_img_path), exist_ok=True)
                 shutil.move(original_img_path, dest_img_path)
                 
                 # Copy the Label to training/ (using the exact original image name to be safe)
-                final_label_name = os.path.splitext(os.path.basename(original_img_path))[0] + ".txt"
+                final_label_name = os.path.splitext(rel_path)[0] + ".txt"
                 dest_label_path = os.path.join(target_labels, final_label_name)
+                os.makedirs(os.path.dirname(dest_label_path), exist_ok=True)
                 shutil.copy2(label_path, dest_label_path)
                 
                 synced_count += 1

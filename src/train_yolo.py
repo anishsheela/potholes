@@ -116,7 +116,7 @@ def train_model(yaml_path, epochs, imgsz, base_weights, save_path):
         data=yaml_path, 
         epochs=epochs, 
         imgsz=imgsz,
-        project='runs/detect',
+        project='runs/segment',
         name='train',
         device=device,
         exist_ok=True # Overwrite previous training runs in this folder for simplicity
@@ -154,7 +154,7 @@ if __name__ == "__main__":
         weights_to_use = custom_weights_path
         print(f"Found existing custom model at {custom_weights_path}. Will resume training from it.")
     else:
-        weights_to_use = "yolov8n.pt"
+        weights_to_use = "yolov8n-seg.pt"
         print(f"No existing custom model found. Starting fresh from base {weights_to_use}...")
     
     split_dir = create_dataset_split(args.data_dir)

@@ -74,7 +74,7 @@ def sample_frames(input_dir, output_dir, num_samples):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Randomly sample frames for YOLO annotation.")
-    parser.add_argument("--input", "-i", type=str, default="output/filtered_frames", help="Input directory containing video folders with frames")
+    parser.add_argument("--input", "-i", type=str, default="processed_data/filtered_frames", help="Input directory containing video folders with frames")
     parser.add_argument("--output", "-o", type=str, default="dataset", help="Base dataset output directory")
     parser.add_argument("--num", "-n", type=int, default=150, help="Number of frames to sample")
     
