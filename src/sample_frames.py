@@ -3,6 +3,7 @@ import random
 import shutil
 import argparse
 import glob
+import uuid
 
 def sample_frames(input_dir, output_dir, num_samples):
     # Find all jpegs in the input directory
@@ -27,7 +28,13 @@ def sample_frames(input_dir, output_dir, num_samples):
         if os.path.exists(check_dir):
             existing_files = glob.glob(os.path.join(check_dir, "**/*.jpg"), recursive=True)
             for f in existing_files:
-                existing_sampled.add(os.path.basename(f))
+                basename = os.path.basename(f)
+                if "---" in basename:
+                    # Strip the random prefix for duplicate checking
+                    original_name = basename.split("---", 1)[1]
+                    existing_sampled.add(original_name)
+                else:
+                    existing_sampled.add(basename)
             
     print(f"Found {len(existing_sampled)} frames that have already been sampled previously.")
     
@@ -60,7 +67,8 @@ def sample_frames(input_dir, output_dir, num_samples):
         video_name = os.path.basename(os.path.dirname(frame_path))
         filename = os.path.basename(frame_path)
         
-        new_filename = f"{video_name}_{filename}"
+        random_prefix = uuid.uuid4().hex[:8]
+        new_filename = f"{random_prefix}---{video_name}_{filename}"
         dest_path = os.path.join(staging_dir, new_filename)
         
         shutil.copy2(frame_path, dest_path)

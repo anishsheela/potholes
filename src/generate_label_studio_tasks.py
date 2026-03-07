@@ -32,6 +32,7 @@ def generate_label_studio_tasks(image_dir, model_path, output_json, project_root
     print(f"Found {len(images)} images to auto-annotate.")
     
     label_studio_tasks = []
+    total_potholes_detected = 0
     
     for img_path in tqdm(images, desc="Generating Pre-Annotations"):
         img = cv2.imread(img_path)
@@ -44,14 +45,13 @@ def generate_label_studio_tasks(image_dir, model_path, output_json, project_root
         results = model.predict(img, conf=0.25, verbose=False)
         boxes = results[0].boxes
         
-        # The user is mounting 'potholes/dataset' directly to '/label-studio/mydata' in Docker.
+        # The user's Label Studio local storage is rooted at the dataset folder.
         # Therefore, we need the relative path starting *after* the dataset folder.
         dataset_dir = os.path.join(project_root, 'dataset')
         rel_path = os.path.relpath(img_path, dataset_dir).replace("\\", "/")
-        docker_abs_path = f"{docker_mount}/{rel_path}"
         
-        # Format the Local Storage URL using the absolute path inside the container
-        image_url = f"/data/local-files/?d={docker_abs_path}"
+        # Format the Local Storage URL using the relative path
+        image_url = f"/data/local-files/?d={rel_path}"
         
         task = {
             "data": {
@@ -62,6 +62,7 @@ def generate_label_studio_tasks(image_dir, model_path, output_json, project_root
         
         if len(boxes) > 0:
             prediction_results = []
+            total_potholes_detected += len(boxes)
             
             for box in boxes:
                 # YOLO format: [x_center, y_center, width, height] (normalized 0-1)
@@ -111,6 +112,7 @@ def generate_label_studio_tasks(image_dir, model_path, output_json, project_root
         
     print("\n--- Auto-Annotation Complete! ---")
     print(f"Exported {len(label_studio_tasks)} tasks to: {output_json}")
+    print(f"Total Potholes Detected: {total_potholes_detected}")
     print("\nLabel Studio Import Instructions (Docker):")
     print("1. In Label Studio: Settings -> Cloud Storage -> Add Source Storage.")
     print(f"2. Select 'Local Storage'. Set Absolute local path to: {docker_mount}")

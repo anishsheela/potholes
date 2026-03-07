@@ -188,10 +188,27 @@ def process_frames(frames_dir, output_csv, config_path, out_invalid=None):
     # Store the invalid GPS rows before dropping them
     invalid_gps_df = new_df[new_df['Latitude'].isna() | new_df['Longitude'].isna()].copy()
     
+    # Categorize the failures
+    no_gps_signal = invalid_gps_df[
+        invalid_gps_df['Raw_OCR'].str.contains(r'--+|—+|^\s*$', regex=True, na=True)
+    ]
+    ocr_failures = invalid_gps_df[
+        ~invalid_gps_df['Raw_OCR'].str.contains(r'--+|—+|^\s*$', regex=True, na=True)
+    ]
+    
     # Filter out empty GPS points from new data
     initial_len = len(new_df)
     new_df = new_df.dropna(subset=['Latitude', 'Longitude'])
-    print(f"\nFiltered {initial_len - len(new_df)} new frames missing valid GPS coordinates.")
+    
+    print(f"\n{'='*60}")
+    print(f"GPS EXTRACTION SUMMARY:")
+    print(f"{'='*60}")
+    print(f"Total frames processed:           {initial_len:,}")
+    print(f"Valid GPS coordinates:            {len(new_df):,} ({len(new_df)/initial_len*100:.1f}%)")
+    print(f"\nDiscarded frames:                 {initial_len - len(new_df):,} ({(initial_len - len(new_df))/initial_len*100:.1f}%)")
+    print(f"  ├─ No GPS signal (camera):      {len(no_gps_signal):,} ({len(no_gps_signal)/initial_len*100:.1f}%)")
+    print(f"  └─ OCR failed to extract:       {len(ocr_failures):,} ({len(ocr_failures)/initial_len*100:.1f}%)")
+    print(f"{'='*60}\n")
     
     if out_invalid and not invalid_gps_df.empty:
         os.makedirs(os.path.dirname(out_invalid), exist_ok=True)

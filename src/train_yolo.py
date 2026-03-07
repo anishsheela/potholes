@@ -6,7 +6,7 @@ import yaml
 import argparse
 from ultralytics import YOLO
 
-def create_dataset_split(base_dir, split_ratio=0.8):
+def create_dataset_split(base_dir, split_ratio=0.8, bg_ratio=0.3):
     """
     Takes nested annotated/batch_X/images/ and labels/ directories and 
     combines them into a single train/ and val/ split required by YOLO.
@@ -14,6 +14,11 @@ def create_dataset_split(base_dir, split_ratio=0.8):
     training_dir = os.path.join(base_dir, 'training')
     
     split_dir = os.path.join(base_dir, 'split')
+    
+    # Clear out the old split directory to prevent data leakage across runs
+    if os.path.exists(split_dir):
+        shutil.rmtree(split_dir)
+        
     train_images = os.path.join(split_dir, 'images', 'train')
     val_images = os.path.join(split_dir, 'images', 'val')
     train_labels = os.path.join(split_dir, 'labels', 'train')
@@ -31,9 +36,8 @@ def create_dataset_split(base_dir, split_ratio=0.8):
     print(f"Found {len(all_images)} total images in {training_dir} for training.")
     
     # Process labels and handle negative samples (backgrounds)
-    valid_data = []
-    pothole_count = 0
-    background_count = 0
+    pothole_data = []
+    background_data = []
     
     for img_path in all_images:
         base_name = os.path.splitext(os.path.basename(img_path))[0]
@@ -46,19 +50,30 @@ def create_dataset_split(base_dir, split_ratio=0.8):
         # Ensure labels folder exists if creating negative samples
         os.makedirs(label_dir, exist_ok=True)
         
-        if os.path.exists(label_path):
-            pothole_count += 1
+        if os.path.exists(label_path) and os.path.getsize(label_path) > 0:
+            pothole_data.append((img_path, label_path))
         else:
             # Create an empty .txt file to tell YOLO "this image has 0 potholes"
-            open(label_path, 'a').close()
-            background_count += 1
+            if not os.path.exists(label_path):
+                open(label_path, 'a').close()
+            background_data.append((img_path, label_path))
             
-        valid_data.append((img_path, label_path))
+    pothole_count = len(pothole_data)
+    background_count = len(background_data)
+    
+    # BALANCE: limit backgrounds to a fraction of the pothole images to prevent class imbalance
+    max_backgrounds = int(pothole_count * bg_ratio)
+    if background_count > max_backgrounds:
+        random.shuffle(background_data)
+        background_data = background_data[:max_backgrounds]
+        print(f"⚠️  Reduced backgrounds from {background_count} to {len(background_data)} for balance")
+        
+    valid_data = pothole_data + background_data
             
-    print(f"Dataset prepared: {pothole_count} Pothole images / {background_count} Background images.")
+    print(f"Balanced dataset: {len(pothole_data)} Pothole images / {len(background_data)} Background images.")
     
     if pothole_count == 0:
-        print("Error: No labeled bounding boxes found. Please ensure you exported from MakeSense in YOLO format.")
+        print("Error: No labeled bounding boxes found. Please ensure you exported from Lablestudio in YOLO format.")
         return None
 
     # Shuffle and split
@@ -134,6 +149,30 @@ def train_model(yaml_path, epochs, imgsz, base_weights, save_path):
         print("\n--- Training Complete! ---")
         print(f"Successfully copied the best model weights safely to: {save_path}")
         print("You can now use predict_video.py to test it out.")
+        
+        # Read and print final metrics from results.csv
+        run_dir = os.path.dirname(os.path.dirname(yolo_best_weights))
+        results_csv = os.path.join(run_dir, 'results.csv')
+        if os.path.exists(results_csv):
+            import csv
+            try:
+                with open(results_csv, 'r') as f:
+                    reader = csv.reader(f)
+                    headers = [h.strip() for h in next(reader)]
+                    last_row = None
+                    for row in reader:
+                        if row: last_row = row
+                    if last_row:
+                        print("\n--- Final Training & Validation Statistics ---")
+                        for h, v in zip(headers, last_row):
+                            if h != 'epoch' and v.strip():
+                                try:
+                                    print(f"  {h}: {float(v):.4f}")
+                                except ValueError:
+                                    pass
+            except Exception as e:
+                print(f"Could not parse results.csv: {e}")
+                
     else:
         print("\n--- Training Finished, but could not locate best weights to copy! ---")
 
@@ -143,6 +182,7 @@ if __name__ == "__main__":
     parser.add_argument("--epochs", type=int, default=50, help="Number of training epochs (default: 50)")
     parser.add_argument("--imgsz", type=int, default=640, help="Image size for training (default: 640)")
     parser.add_argument("--weights", type=str, default=None, help="Explicitly force init weights (e.g., yolov8n.pt). Otherwise auto-resumes from models/best_pothole.pt")
+    parser.add_argument("--bg-ratio", type=float, default=0.3, help="Maximum ratio of background images to pothole images (default: 0.3)")
     
     args = parser.parse_args()
     
@@ -154,10 +194,10 @@ if __name__ == "__main__":
         weights_to_use = custom_weights_path
         print(f"Found existing custom model at {custom_weights_path}. Will resume training from it.")
     else:
-        weights_to_use = "yolov8n-seg.pt"
+        weights_to_use = "yolov8n.pt"
         print(f"No existing custom model found. Starting fresh from base {weights_to_use}...")
     
-    split_dir = create_dataset_split(args.data_dir)
+    split_dir = create_dataset_split(args.data_dir, bg_ratio=args.bg_ratio)
     if split_dir:
         yaml_path = os.path.join(args.data_dir, 'pothole.yaml')
         create_yaml(split_dir, yaml_path)
