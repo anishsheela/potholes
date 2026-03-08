@@ -123,7 +123,12 @@ def train_model(yaml_path, epochs, imgsz, base_weights, save_path):
     model = YOLO(base_weights) 
     
     import torch
-    device = 'mps' if torch.backends.mps.is_available() else 'cpu'
+    if torch.cuda.is_available():
+        device = 'cuda:0'
+    elif torch.backends.mps.is_available():
+        device = 'mps'
+    else:
+        device = 'cpu'
     print(f"Enforcing hardware acceleration: {device}")
 
     # Train the model

@@ -17,7 +17,16 @@ def predict_video(video_path, model_weights, output_dir):
         return
 
     print(f"Loading custom YOLO model from {model_weights}...")
+    import torch
+    if torch.cuda.is_available():
+        device = 'cuda:0'
+    elif torch.backends.mps.is_available():
+        device = 'mps'
+    else:
+        device = 'cpu'
+    print(f"Using hardware acceleration: {device}")
     model = YOLO(model_weights)
+    model.to(device)
     
     video_name = os.path.basename(video_path)
     base_name, ext = os.path.splitext(video_name)

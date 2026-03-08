@@ -22,7 +22,16 @@ def generate_label_studio_tasks(image_dir, model_path, output_json, project_root
         return
         
     print(f"Loading YOLO model from {model_path}...")
+    import torch
+    if torch.cuda.is_available():
+        device = 'cuda:0'
+    elif torch.backends.mps.is_available():
+        device = 'mps'
+    else:
+        device = 'cpu'
+    print(f"Using hardware acceleration: {device}")
     model = YOLO(model_path)
+    model.to(device)
     
     images = glob.glob(os.path.join(image_dir, '**', '*.jpg'), recursive=True)
     if not images:
