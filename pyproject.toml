@@ -12,6 +12,8 @@ dependencies = [
     "cryptography==46.0.4",
     "ecdsa==0.19.1",
     "idna==3.11",
+    "numpy>=2.4.2",
+    "opencv-python>=4.13.0.92",
     "passlib==1.7.4",
     "pyasn1==0.6.2",
     "pycparser==3.0",
@@ -20,5 +22,7 @@ dependencies = [
     "requests==2.32.5",
     "rsa==4.9.1",
     "six==1.17.0",
+    "tqdm>=4.67.3",
+    "ultralytics>=8.4.21",
     "urllib3==2.6.3",
 ]
