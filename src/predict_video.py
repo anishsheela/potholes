@@ -1,33 +1,13 @@
 import cv2
 import argparse
 import os
+import glob
 from ultralytics import YOLO
 
-def predict_video(video_path, model_weights, output_dir):
+def _process_single_video(video_path, model, output_dir):
     """
-    Runs a custom YOLOv8 model on a video file and saves the output.
+    Runs a custom YOLOv8 model on a single video file and saves the output.
     """
-    if not os.path.exists(video_path):
-        print(f"Error: Video file not found: {video_path}")
-        return
-        
-    if not os.path.exists(model_weights):
-        print(f"Error: Model weights not found: {model_weights}")
-        print("Please run train_yolo.py first to generate the best.pt file.")
-        return
-
-    print(f"Loading custom YOLO model from {model_weights}...")
-    import torch
-    if torch.cuda.is_available():
-        device = 'cuda:0'
-    elif torch.backends.mps.is_available():
-        device = 'mps'
-    else:
-        device = 'cpu'
-    print(f"Using hardware acceleration: {device}")
-    model = YOLO(model_weights)
-    model.to(device)
-    
     video_name = os.path.basename(video_path)
     base_name, ext = os.path.splitext(video_name)
     os.makedirs(output_dir, exist_ok=True)
@@ -83,12 +63,54 @@ def predict_video(video_path, model_weights, output_dir):
     print(f"Potholes Detected: {potholes_detected} (Total detections across all frames)")
     print(f"Saved Annotated Video to: {output_path}")
 
+def predict_video(input_path, model_weights, output_dir):
+    """
+    Runs a custom YOLOv8 model on a video file or directory of videos and saves the output.
+    """
+    if not os.path.exists(input_path):
+        print(f"Error: Input path not found: {input_path}")
+        return
+        
+    if not os.path.exists(model_weights):
+        print(f"Error: Model weights not found: {model_weights}")
+        print("Please run train_yolo.py first to generate the best.pt file.")
+        return
+
+    print(f"Loading custom YOLO model from {model_weights}...")
+    import torch
+    if torch.cuda.is_available():
+        device = 'cuda:0'
+    elif torch.backends.mps.is_available():
+        device = 'mps'
+    else:
+        device = 'cpu'
+    print(f"Using hardware acceleration: {device}")
+    model = YOLO(model_weights)
+    model.to(device)
+
+    if os.path.isdir(input_path):
+        video_files = []
+        for ext in ('*.mp4', '*.MP4', '*.avi', '*.AVI', '*.mov', '*.MOV'):
+            video_files.extend(glob.glob(os.path.join(input_path, ext)))
+        if not video_files:
+            print(f"No video files found in directory: {input_path}")
+            return
+        video_paths = sorted(video_files)
+        print(f"Found {len(video_paths)} videos in {input_path}. Processing...")
+    else:
+        video_paths = [input_path]
+
+    for v_path in video_paths:
+        _process_single_video(v_path, model, output_dir)
+        print("-" * 50)
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Pothole Detection Video Inference")
-    parser.add_argument("--video", "-v", type=str, required=True, help="Path to input .MP4 video")
+    # We keep --video for backward compatibility, but it also accepts directories now
+    parser.add_argument("--video", "-v", "--source", "-s", type=str, required=True, dest="source", help="Path to input video or directory containing videos")
     parser.add_argument("--weights", "-w", type=str, default="models/best_pothole.pt", help="Path to trained YOLO model .pt file")
     parser.add_argument("--out-dir", "-o", type=str, default="processed_data/annotated_videos", help="Directory to save the final video")
     
     args = parser.parse_args()
     
-    predict_video(args.video, args.weights, args.out_dir)
+    predict_video(args.source, args.weights, args.out_dir)
