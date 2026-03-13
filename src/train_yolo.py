@@ -6,7 +6,7 @@ import yaml
 import argparse
 from ultralytics import YOLO
 
-def create_dataset_split(base_dir, split_ratio=0.8, bg_ratio=0.3):
+def create_dataset_split(base_dir, split_ratio=0.8, bg_ratio=0.3, reuse_split=False):
     """
     Takes nested annotated/batch_X/images/ and labels/ directories and 
     combines them into a single train/ and val/ split required by YOLO.
@@ -15,6 +15,11 @@ def create_dataset_split(base_dir, split_ratio=0.8, bg_ratio=0.3):
     
     split_dir = os.path.join(base_dir, 'split')
     
+    if reuse_split and os.path.exists(split_dir):
+        if os.path.exists(os.path.join(split_dir, 'images', 'train')):
+            print(f"Reusing existing dataset split at {split_dir}")
+            return split_dir
+            
     # Clear out the old split directory to prevent data leakage across runs
     if os.path.exists(split_dir):
         shutil.rmtree(split_dir)
@@ -113,7 +118,7 @@ def create_yaml(split_dir, yaml_path):
         
     print(f"Created YOLO dataset configuration at {yaml_path}")
 
-def train_model(yaml_path, epochs, imgsz, base_weights, save_path):
+def train_model(yaml_path, epochs, imgsz, base_weights, save_path, run_name='train'):
     """
     Loads YOLO configuration and trains it on the custom dataset.
     """
@@ -137,7 +142,7 @@ def train_model(yaml_path, epochs, imgsz, base_weights, save_path):
         epochs=epochs, 
         imgsz=imgsz,
         project='runs/segment',
-        name='train',
+        name=run_name,
         device=device,
         exist_ok=True # Overwrite previous training runs in this folder for simplicity
     )
@@ -186,15 +191,18 @@ if __name__ == "__main__":
     parser.add_argument("--data-dir", type=str, default="dataset", help="Base dataset directory containing images/ and labels/")
     parser.add_argument("--epochs", type=int, default=50, help="Number of training epochs (default: 50)")
     parser.add_argument("--imgsz", type=int, default=640, help="Image size for training (default: 640)")
-    parser.add_argument("--weights", type=str, default=None, help="Explicitly force init weights (e.g., yolov8n.pt). Otherwise auto-resumes from models/best_pothole.pt")
+    parser.add_argument("--model", type=str, default=None, help="Explicitly force init model (e.g., yolov8n.pt). Otherwise auto-resumes from models/best_pothole.pt")
     parser.add_argument("--bg-ratio", type=float, default=0.3, help="Maximum ratio of background images to pothole images (default: 0.3)")
+    parser.add_argument("--run-name", type=str, default="train", help="Name of the run folder in runs/segment/")
+    parser.add_argument("--save-weights", type=str, default="models/best_pothole.pt", help="Path to save the best weights")
+    parser.add_argument("--reuse-split", action="store_true", help="Reuse existing dataset split if it exists")
     
     args = parser.parse_args()
     
-    custom_weights_path = 'models/best_pothole.pt'
+    custom_weights_path = args.save_weights
     
-    if args.weights:
-        weights_to_use = args.weights
+    if args.model:
+        weights_to_use = args.model
     elif os.path.exists(custom_weights_path):
         weights_to_use = custom_weights_path
         print(f"Found existing custom model at {custom_weights_path}. Will resume training from it.")
@@ -202,8 +210,9 @@ if __name__ == "__main__":
         weights_to_use = "yolov8n.pt"
         print(f"No existing custom model found. Starting fresh from base {weights_to_use}...")
     
-    split_dir = create_dataset_split(args.data_dir, bg_ratio=args.bg_ratio)
+    split_dir = create_dataset_split(args.data_dir, bg_ratio=args.bg_ratio, reuse_split=args.reuse_split)
     if split_dir:
         yaml_path = os.path.join(args.data_dir, 'pothole.yaml')
         create_yaml(split_dir, yaml_path)
-        train_model(yaml_path, args.epochs, args.imgsz, weights_to_use, custom_weights_path)
+        train_model(yaml_path, args.epochs, args.imgsz, weights_to_use, custom_weights_path, args.run_name)
+
