@@ -38,7 +38,8 @@ def parse_results(run_name, model_name):
     return None
 
 def main():
-    epochs = 50 # Modify this to match the number of epochs you want to tune for
+    epochs = 70 # Modify this to match the number of epochs you want to tune for
+    bg_ratio = "0.5"
     output_csv = "tuning_results.csv"
     
     headers_written = os.path.exists(output_csv)
@@ -57,6 +58,7 @@ def main():
             "--model", model,
             "--epochs", str(epochs),
             "--run-name", run_name,
+            "--bg-ratio", bg_ratio,
             "--save-weights", save_weights
         ]
         
