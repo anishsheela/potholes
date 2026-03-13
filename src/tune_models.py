@@ -13,11 +13,25 @@ MODELS = [
 
 def parse_results(run_name, model_name):
     # Parse results.csv to get final metrics metrics from the run.
+    import glob
+    import os
+    
     # We dynamically look for the final epoch line to grab the results.
-    results_path = os.path.join("runs", "segment", run_name, "results.csv")
-    if not os.path.exists(results_path):
-        print(f"Warning: No results found at {results_path}")
-        return None
+    # YOLO ultralytics file pathing can be unpredictable (segment vs detect)
+    search_pattern = f"runs/**/{run_name}/results.csv"
+    possible_paths = glob.glob(search_pattern, recursive=True)
+    
+    if not possible_paths:
+        # Fallback to the most recently modified results.csv if exact folder name isn't found
+        fallback_paths = glob.glob("runs/**/results.csv", recursive=True)
+        if not fallback_paths:
+            print(f"Warning: No results found anywhere in runs/ for {run_name}")
+            return None
+        fallback_paths.sort(key=os.path.getmtime, reverse=True)
+        results_path = fallback_paths[0]
+        print(f"Warning: Exact folder '{run_name}' not found. Falling back to {results_path}")
+    else:
+        results_path = possible_paths[0]
     
     with open(results_path, 'r') as f:
         reader = csv.reader(f)
