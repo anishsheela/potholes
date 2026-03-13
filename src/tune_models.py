@@ -3,12 +3,12 @@ import subprocess
 import csv
 
 MODELS = [
-    "yolov8n.pt", "yolov8s.pt", "yolov8m.pt", "yolov8l.pt", "yolov8x.pt",
-    "yolov9t.pt", "yolov9s.pt", "yolov9m.pt", "yolov9c.pt", "yolov9e.pt",
-    "yolov10n.pt", "yolov10s.pt", "yolov10m.pt", "yolov10l.pt", "yolov10x.pt",
-    "yolo11n.pt", "yolo11s.pt", "yolo11m.pt", "yolo11l.pt", "yolo11x.pt",
-    "yolov12n.pt", "yolov12s.pt", "yolov12m.pt", "yolov12l.pt", "yolov12x.pt",
-    "yolo26n.pt", "yolo26s.pt", "yolo26m.pt", "yolo26l.pt", "yolo26x.pt"
+    "yolov8n.pt", "yolov8s.pt", "yolov8m.pt", "yolov8l.pt",
+    "yolov9t.pt", "yolov9s.pt", "yolov9m.pt", "yolov9c.pt",
+    "yolov10n.pt", "yolov10s.pt", "yolov10m.pt", "yolov10l.pt",
+    "yolo11n.pt", "yolo11s.pt", "yolo11m.pt", "yolo11l.pt",
+    "yolov12n.pt", "yolov12s.pt", "yolov12m.pt", "yolov12l.pt",
+    "yolo26n.pt", "yolo26s.pt", "yolo26m.pt", "yolo26l.pt"
 ]
 
 def parse_results(run_name, model_name):
