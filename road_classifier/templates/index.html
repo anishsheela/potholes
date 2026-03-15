@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Road Condition Classifier</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        .stats-bar {
+            background: rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-around;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        .stat-item {
+            text-align: center;
+            color: white;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+            display: block;
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+
+        .progress-bar {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            height: 30px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+
+        .progress-fill {
+            background: linear-gradient(90deg, #4CAF50, #8BC34A);
+            height: 100%;
+            transition: width 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+
+        .main-content {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .classifier-panel {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .login-screen {
+            text-align: center;
+        }
+
+        .username-input {
+            width: 100%;
+            max-width: 400px;
+            padding: 15px;
+            font-size: 1.1rem;
+            border: 2px solid #667eea;
+            border-radius: 10px;
+            margin: 20px auto;
+            display: block;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            font-size: 1.1rem;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .image-container {
+            background: #f5f5f5;
+            border-radius: 15px;
+            padding: 20px;
+            margin: 20px 0;
+            text-align: center;
+            min-height: 600px; /* Increased min-height */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .image-container img {
+            max-width: 100%;
+            max-height: 75vh; /* Much larger image */
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        .classification-buttons {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            margin: 10px 0;
+        }
+
+        .class-btn {
+            padding: 25px 20px;
+            font-size: 1.3rem;
+            font-weight: bold;
+            border: 4px solid transparent;
+            border-radius: 15px;
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        .class-btn .shortcut {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: rgba(0,0,0,0.2);
+            color: white;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.8rem;
+            font-weight: bold;
+        }
+
+        .class-btn.excellent {
+            background: linear-gradient(135deg, #00C853, #4CAF50);
+            color: white;
+        }
+
+        .class-btn.good {
+            background: linear-gradient(135deg, #8BC34A, #CDDC39);
+            color: white;
+        }
+
+        .class-btn.fair {
+            background: linear-gradient(135deg, #FF9800, #FFC107);
+            color: white;
+        }
+
+        .class-btn.poor {
+            background: linear-gradient(135deg, #F44336, #E91E63);
+            color: white;
+        }
+
+        .class-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 5px 20px rgba(0,0,0,0.2);
+        }
+
+        .shortcut-hint {
+            text-align: center;
+            color: #666;
+            font-size: 0.9rem;
+            margin-top: 5px;
+        }
+
+        .bottom-sections {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 30px;
+        }
+
+        @media (max-width: 1024px) {
+            .bottom-sections {
+                grid-template-columns: 1fr;
+            }
+            .classification-buttons {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        .panel {
+            background: white;
+            border-radius: 20px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .panel h2 {
+            margin-bottom: 15px;
+            color: #667eea;
+            font-size: 1.3rem;
+        }
+
+        .leaderboard-item {
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            margin: 8px 0;
+            background: #f8f9fa;
+            border-radius: 10px;
+            transition: transform 0.2s;
+        }
+
+        .leaderboard-item:hover {
+            transform: translateX(5px);
+            background: #e9ecef;
+        }
+
+        .rank {
+            font-size: 1.5rem;
+            font-weight: bold;
+            width: 40px;
+            text-align: center;
+        }
+
+        .rank.gold { color: #FFD700; }
+        .rank.silver { color: #C0C0C0; }
+        .rank.bronze { color: #CD7F32; }
+
+        .user-info {
+            flex: 1;
+            margin-left: 10px;
+        }
+
+        .username {
+            font-weight: bold;
+            font-size: 1rem;
+        }
+
+        .user-stats {
+            font-size: 0.85rem;
+            color: #666;
+        }
+
+        .points {
+            font-size: 1.1rem;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .achievement-badge {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            margin: 2px;
+        }
+
+        .achievement-popup {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            transform: translateX(150%);
+            background: white;
+            padding: 15px 25px;
+            border-radius: 12px;
+            border-left: 5px solid #4CAF50;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            z-index: 1000;
+            transition: transform 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .achievement-popup.show {
+            transform: translateX(0);
+        }
+
+        .achievement-popup h2 {
+            font-size: 1.8rem;
+            margin: 0;
+        }
+
+        .achievement-popup-content {
+            text-align: left;
+        }
+
+        .achievement-popup-content h3 {
+            color: #667eea;
+            margin: 0 0 4px 0;
+            font-size: 1.1rem;
+        }
+
+        .achievement-popup-content p {
+            color: #666;
+            margin: 0;
+            font-size: 0.85rem;
+        }
+
+        .achievement-points {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #4CAF50;
+            white-space: nowrap;
+        }
+
+        .skip-btn {
+            background: #6c757d;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+
+        .skip-btn:hover {
+            background: #5a6268;
+        }
+
+        .timer {
+            text-align: center;
+            font-size: 1.5rem;
+            color: #667eea;
+            margin: 10px 0;
+        }
+
+        .your-stats {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+        }
+
+        .your-stats h3 {
+            margin-bottom: 15px;
+        }
+
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 8px 0;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .class-distribution {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .distribution-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .dist-item {
+            background: rgba(0,0,0,0.2);
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .dist-count {
+            font-size: 1.5rem;
+            font-weight: bold;
+            display: block;
+            margin-top: 5px;
+        }
+
+        /* Color coding for distribution stats */
+        .dist-item.excellent-stat .dist-count { color: #4CAF50; }
+        .dist-item.good-stat .dist-count { color: #8BC34A; }
+        .dist-item.fair-stat .dist-count { color: #FF9800; }
+        .dist-item.poor-stat .dist-count { color: #F44336; }
+
+        .completed-screen {
+            text-align: center;
+            padding: 60px 20px;
+        }
+
+        .completed-screen h2 {
+            font-size: 3rem;
+            margin-bottom: 20px;
+            color: #667eea;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+
+        <div class="main-content">
+            <div class="classifier-panel">
+                <div id="login-screen" class="login-screen">
+                    <h2>👋 Welcome!</h2>
+                    <p>Enter your name to start classifying</p>
+                    <input type="text" id="username-input" class="username-input" placeholder="Enter your name" />
+                    <button class="btn" onclick="startClassifying()">Start Classifying</button>
+                    
+                    <div class="header" style="margin-top: 50px;">
+                        <h1>🛣️ Road Condition Classifier</h1>
+                        <p>Classify roads into 4 categories • Compete with friends • Earn achievements!</p>
+                    </div>
+                </div>
+
+                <div id="classifier-screen" style="display: none;">
+                    
+                    <!-- Buttons at the top -->
+                    <div class="classification-buttons">
+                        <button class="class-btn excellent" onclick="classify('Excellent')">
+                            <div class="shortcut">Q</div>
+                            ✨ Excellent<br>
+                            <span style="font-size: 0.8rem; opacity: 0.9;">Perf (<span id="btn-count-excellent">0</span>)</span>
+                        </button>
+                        <button class="class-btn good" onclick="classify('Good')">
+                            <div class="shortcut">W</div>
+                            ✅ Good<br>
+                            <span style="font-size: 0.8rem; opacity: 0.9;">Minor (<span id="btn-count-good">0</span>)</span>
+                        </button>
+                        <button class="class-btn fair" onclick="classify('Fair')">
+                            <div class="shortcut">E</div>
+                            ⚠️ Fair<br>
+                            <span style="font-size: 0.8rem; opacity: 0.9;">Some (<span id="btn-count-fair">0</span>)</span>
+                        </button>
+                        <button class="class-btn poor" onclick="classify('Poor')">
+                            <div class="shortcut">R</div>
+                            ❌ Poor<br>
+                            <span style="font-size: 0.8rem; opacity: 0.9;">Severe (<span id="btn-count-poor">0</span>)</span>
+                        </button>
+                    </div>
+
+                    <div style="text-align: center; margin-bottom: 10px; display: flex; justify-content: center; align-items: center; gap: 20px;">
+                        <div class="timer" style="margin: 0;">⏱️ <span id="timer">0s</span></div>
+                        <button class="skip-btn" style="margin: 0;" onclick="skipImage()">Skip Image (Space)</button>
+                    </div>
+                    
+                    <!-- Larger image focus -->
+                    <div class="image-container" id="image-container">
+                        <p style="color: #999;">Loading image...</p>
+                    </div>
+
+                </div>
+
+                <div id="completed-screen" style="display: none;" class="completed-screen">
+                    <h2>🎉 All Done!</h2>
+                    <p>All images have been classified. Great work!</p>
+                </div>
+            </div>
+
+            <!-- Bottom Sections: Stats & Leaderboard -->
+            <div id="bottom-info-area" style="display: none;">
+                
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progress-fill" style="width: 0%">
+                        <span id="progress-text">0%</span>
+                    </div>
+                </div>
+
+                <div class="bottom-sections">
+                    <div class="panel your-stats">
+                        <h3>📊 Overall Statistics</h3>
+                        
+                        <div class="stats-bar" style="background: rgba(0,0,0,0.1); padding: 10px; margin-top: 10px;">
+                            <div class="stat-item">
+                                <span class="stat-value" id="total-images">0</span>
+                                <span class="stat-label">Total</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-value" id="classified-count">0</span>
+                                <span class="stat-label">Done</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-value" id="remaining-count">0</span>
+                                <span class="stat-label">Left</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-value" id="active-users">0</span>
+                                <span class="stat-label">Users</span>
+                            </div>
+                        </div>
+
+                        <!-- Class Balance Section -->
+                        <div class="class-distribution">
+                            <h4>Class Balance (Total Labels)</h4>
+                            <div class="distribution-grid">
+                                <div class="dist-item excellent-stat">
+                                    <div class="stat-label">✨ Excellent</div>
+                                    <span class="dist-count" id="count-excellent">0</span>
+                                </div>
+                                <div class="dist-item good-stat">
+                                    <div class="stat-label">✅ Good</div>
+                                    <span class="dist-count" id="count-good">0</span>
+                                </div>
+                                <div class="dist-item fair-stat">
+                                    <div class="stat-label">⚠️ Fair</div>
+                                    <span class="dist-count" id="count-fair">0</span>
+                                </div>
+                                <div class="dist-item poor-stat">
+                                    <div class="stat-label">❌ Poor</div>
+                                    <span class="dist-count" id="count-poor">0</span>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <div class="panel">
+                        <h2>🏆 Leaderboard</h2>
+                        <div id="leaderboard">
+                            <p style="text-align: center; color: #999;">No data yet</p>
+                        </div>
+
+                        <div id="your-stats" style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #eee; display: none;">
+                            <h3 style="color: #667eea; margin-bottom: 10px;">Your Impact</h3>
+                            <div class="stat-row" style="color: #333; border-color: #eee;">
+                                <span>Labels:</span>
+                                <strong id="your-labels">0</strong>
+                            </div>
+                            <div class="stat-row" style="color: #333; border-color: #eee;">
+                                <span>Points:</span>
+                                <strong id="your-points" style="color: #4CAF50;">0</strong>
+                            </div>
+                            <div id="your-achievements"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="header" style="margin-top: 40px; opacity: 0.7;">
+                    <h2>🛣️ Road Condition Classifier</h2>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <div class="achievement-popup" id="achievement-popup">
+        <h2>🎉</h2>
+        <div class="achievement-popup-content">
+            <h3 id="achievement-name"></h3>
+            <p id="achievement-desc"></p>
+        </div>
+        <div class="achievement-points">+<span id="achievement-points"></span> pts</div>
+    </div>
+
+    <script>
+        let username = '';
+        let currentImage = null;
+        let startTime = null;
+        let timerInterval = null;
+
+        // Start classification
+        function startClassifying() {
+            const inputEl = document.getElementById('username-input');
+            const input = inputEl.value.trim();
+            if (!input) {
+                inputEl.placeholder = 'Please enter your name first!';
+                inputEl.style.borderColor = '#F44336';
+                inputEl.focus();
+                return;
+            }
+            
+            username = input;
+            document.getElementById('login-screen').style.display = 'none';
+            document.getElementById('classifier-screen').style.display = 'block';
+            document.getElementById('bottom-info-area').style.display = 'block';
+            document.getElementById('your-stats').style.display = 'block';
+            
+            loadNextImage();
+            updateLeaderboard();
+            updateStats();
+            
+            // Update stats every 10 seconds
+            setInterval(updateStats, 10000);
+            setInterval(updateLeaderboard, 15000);
+        }
+
+        // Load next image
+        async function loadNextImage() {
+            try {
+                const response = await fetch('/api/next_image', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({username})
+                });
+                
+                const data = await response.json();
+                
+                if (data.completed) {
+                    showCompleted();
+                    return;
+                }
+                
+                currentImage = data.image;
+                document.getElementById('image-container').innerHTML = 
+                    `<img src="${data.url}" alt="Road image">`;
+                
+                startTimer();
+            } catch (error) {
+                console.error('Error loading image:', error);
+            }
+        }
+
+        // Classify image
+        async function classify(label) {
+            if (!currentImage) return;
+            
+            const timeTaken = stopTimer();
+            
+            try {
+                const response = await fetch('/api/classify', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        image: currentImage,
+                        label: label,
+                        username: username,
+                        time_taken: timeTaken
+                    })
+                });
+                
+                const data = await response.json();
+                
+                // Show achievements if any
+                if (data.new_achievements && data.new_achievements.length > 0) {
+                    showAchievement(data.new_achievements[0]);
+                }
+                
+                // Update personal stats
+                updatePersonalStats();
+                
+                // Load next image
+                loadNextImage();
+                
+            } catch (error) {
+                console.error('Error classifying:', error);
+            }
+        }
+
+        // Skip image
+        async function skipImage() {
+            stopTimer();
+            
+            try {
+                await fetch('/api/skip', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({username})
+                });
+                
+                loadNextImage();
+            } catch (error) {
+                console.error('Error skipping:', error);
+            }
+        }
+
+        // Timer functions
+        function startTimer() {
+            startTime = Date.now();
+            timerInterval = setInterval(() => {
+                const elapsed = Math.floor((Date.now() - startTime) / 1000);
+                document.getElementById('timer').textContent = `${elapsed}s`;
+            }, 100);
+        }
+
+        function stopTimer() {
+            if (timerInterval) {
+                clearInterval(timerInterval);
+            }
+            const elapsed = (Date.now() - startTime) / 1000;
+            return elapsed;
+        }
+
+        // Update leaderboard
+        async function updateLeaderboard() {
+            try {
+                const response = await fetch('/api/leaderboard');
+                const data = await response.json();
+                
+                const leaderboard = document.getElementById('leaderboard');
+                
+                if (data.length === 0) {
+                    leaderboard.innerHTML = '<p style="text-align: center; color: #999;">No data yet</p>';
+                    return;
+                }
+                
+                leaderboard.innerHTML = data.map((user, index) => {
+                    const rankClass = index === 0 ? 'gold' : index === 1 ? 'silver' : index === 2 ? 'bronze' : '';
+                    const rankSymbol = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : (index + 1);
+                    
+                    return `
+                        <div class="leaderboard-item">
+                            <div class="rank ${rankClass}">${rankSymbol}</div>
+                            <div class="user-info">
+                                <div class="username">${user.username}</div>
+                                <div class="user-stats">${user.total_labels} labels</div>
+                            </div>
+                            <div class="points">${user.points} pts</div>
+                        </div>
+                    `;
+                }).join('');
+                
+            } catch (error) {
+                console.error('Error updating leaderboard:', error);
+            }
+        }
+
+        // Update overall stats
+        async function updateStats() {
+            try {
+                const response = await fetch('/api/stats');
+                const data = await response.json();
+                
+                document.getElementById('total-images').textContent = data.total_images;
+                document.getElementById('classified-count').textContent = data.classified;
+                document.getElementById('remaining-count').textContent = data.remaining;
+                document.getElementById('active-users').textContent = data.active_users;
+                
+                const progressFill = document.getElementById('progress-fill');
+                const progressText = document.getElementById('progress-text');
+                if (progressFill && progressText) {
+                    progressFill.style.width = data.progress_percent + '%';
+                    progressText.textContent = data.progress_percent + '%';
+                }
+
+                // Update Class Distribution on Buttons and Bottom Array
+                const dist = data.label_distribution || {};
+                
+                // Bottom stats
+                document.getElementById('count-excellent').textContent = dist['Excellent'] || 0;
+                document.getElementById('count-good').textContent = dist['Good'] || 0;
+                document.getElementById('count-fair').textContent = dist['Fair'] || 0;
+                document.getElementById('count-poor').textContent = dist['Poor'] || 0;
+
+                // On Buttons
+                const btnExcellent = document.getElementById('btn-count-excellent');
+                if (btnExcellent) btnExcellent.textContent = dist['Excellent'] || 0;
+                
+                const btnGood = document.getElementById('btn-count-good');
+                if (btnGood) btnGood.textContent = dist['Good'] || 0;
+                
+                const btnFair = document.getElementById('btn-count-fair');
+                if (btnFair) btnFair.textContent = dist['Fair'] || 0;
+                
+                const btnPoor = document.getElementById('btn-count-poor');
+                if (btnPoor) btnPoor.textContent = dist['Poor'] || 0;
+                
+            } catch (error) {
+                console.error('Error updating stats:', error);
+            }
+        }
+
+        // Update personal stats
+        async function updatePersonalStats() {
+            try {
+                const response = await fetch('/api/leaderboard');
+                const data = await response.json();
+                
+                const userStats = data.find(u => u.username === username);
+                if (userStats) {
+                    document.getElementById('your-labels').textContent = userStats.total_labels;
+                    document.getElementById('your-points').textContent = userStats.points;
+                    
+                    const achievementsDiv = document.getElementById('your-achievements');
+                    if (userStats.achievements.length > 0) {
+                        achievementsDiv.innerHTML = '<div style="margin-top: 15px;"><strong>Achievements:</strong><br>' +
+                            userStats.achievements.map(a => `<span class="achievement-badge">${a}</span>`).join('') +
+                            '</div>';
+                    }
+                }
+            } catch (error) {
+                console.error('Error updating personal stats:', error);
+            }
+        }
+
+        // Show achievement popup
+        function showAchievement(achievement) {
+            document.getElementById('achievement-name').textContent = achievement.name;
+            document.getElementById('achievement-desc').textContent = achievement.description;
+            document.getElementById('achievement-points').textContent = achievement.points;
+            
+            document.getElementById('achievement-popup').classList.add('show');
+            
+            updateLeaderboard();
+            
+            // Auto close after 3.5 seconds
+            setTimeout(() => {
+                closeAchievement();
+            }, 3500);
+        }
+
+        function closeAchievement() {
+            document.getElementById('achievement-popup').classList.remove('show');
+        }
+
+        function showCompleted() {
+            document.getElementById('classifier-screen').style.display = 'none';
+            document.getElementById('completed-screen').style.display = 'block';
+            updateStats();
+            updateLeaderboard();
+        }
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (document.getElementById('classifier-screen').style.display === 'none') return;
+            
+            // Prevent default for our shortcuts
+            if (['q', 'w', 'e', 'r', ' '].includes(e.key.toLowerCase())) {
+                e.preventDefault();
+            }
+            
+            if (e.key === 'q' || e.key === 'Q') classify('Excellent');
+            else if (e.key === 'w' || e.key === 'W') classify('Good');
+            else if (e.key === 'e' || e.key === 'E') classify('Fair');
+            else if (e.key === 'r' || e.key === 'R') classify('Poor');
+            else if (e.key === ' ') skipImage(); // Spacebar
+        });
+
+        // Initial stats update
+        updateStats();
+    </script>
+</body>
+</html>
