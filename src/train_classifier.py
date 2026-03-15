@@ -11,6 +11,8 @@ import torchvision
 from torchvision import datasets, transforms
 import timm
 from tqdm import tqdm
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+import json
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Train Road Condition Classifier')
@@ -149,6 +151,9 @@ def main():
         correct = 0
         total = 0
         
+        all_targets = []
+        all_preds = []
+        
         progress_bar = tqdm(dataloader, desc=f"Epoch {epoch+1}/{args.epochs}")
         for inputs, targets in progress_bar:
             inputs, targets = inputs.to(device), targets.to(device)
@@ -166,11 +171,20 @@ def main():
             total += targets.size(0)
             correct += predicted.eq(targets).sum().item()
             
+            all_targets.extend(targets.cpu().numpy())
+            all_preds.extend(predicted.cpu().numpy())
+            
             progress_bar.set_postfix({'loss': loss.item(), 'acc': 100.*correct/total})
             
         epoch_loss = running_loss / len(dataset)
         epoch_acc = 100. * correct / total
-        print(f"Epoch {epoch+1} Summary: Loss: {epoch_loss:.4f} | Acc: {epoch_acc:.2f}%")
+        
+        # Calculate sklearn metrics (macro average for multiclass)
+        epoch_precision = precision_score(all_targets, all_preds, average='macro', zero_division=0)
+        epoch_recall = recall_score(all_targets, all_preds, average='macro', zero_division=0)
+        epoch_f1 = f1_score(all_targets, all_preds, average='macro', zero_division=0)
+        
+        print(f"Epoch {epoch+1} Summary: Loss: {epoch_loss:.4f} | Acc: {epoch_acc:.2f}% | P: {epoch_precision:.4f} | R: {epoch_recall:.4f} | F1: {epoch_f1:.4f}")
         
     time_elapsed = time.time() - start_time
     print(f'\nTraining complete in {time_elapsed // 60:.0f}m {time_elapsed % 60:.0f}s')
@@ -180,6 +194,22 @@ def main():
     save_path = f"models/{args.model}_epochs{args.epochs}_acc{epoch_acc:.0f}.pth"
     torch.save(model.state_dict(), save_path)
     print(f"Model saved to {save_path}")
+
+    # Output JSON payload at the very end for the tuner script to parse
+    final_metrics = {
+        "model": args.model,
+        "epochs": args.epochs,
+        "lr": args.lr,
+        "batch_size": args.batch_size,
+        "time_seconds": time_elapsed,
+        "accuracy": epoch_acc,
+        "precision": epoch_precision * 100,
+        "recall": epoch_recall * 100,
+        "f1_score": epoch_f1 * 100
+    }
+    print("\n--- JSON_METRICS_START ---")
+    print(json.dumps(final_metrics))
+    print("--- JSON_METRICS_END ---")
 
 if __name__ == '__main__':
     main()
