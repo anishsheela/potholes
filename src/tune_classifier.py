@@ -63,24 +63,36 @@ def main():
         # Run the training script
         try:
             start_train = time.time()
-            # Capture output so we can parse results (print it live too)
-            process = subprocess.run(
+            
+            # Use Popen to stream output line-by-line while collecting it
+            process = subprocess.Popen(
                 cmd,
-                check=True,
-                text=True,
                 stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE
+                stderr=subprocess.STDOUT, # Merge stderr into stdout
+                text=True,
+                bufsize=1, # Line buffered
+                universal_newlines=True
             )
             
-            # Print output live to terminal (passthrough)
-            print(process.stdout)
-            if process.stderr:
-                print(process.stderr)
+            full_output = []
+            
+            # Print output live to terminal 
+            for line in process.stdout:
+                print(line, end='', flush=True)
+                full_output.append(line)
+                
+            process.wait()
+            
+            if process.returncode != 0:
+                raise subprocess.CalledProcessError(process.returncode, cmd)
                 
             time_taken = time.time() - start_train
             
+            # Reconstruct the full output for parsing
+            full_output_str = "".join(full_output)
+            
             # Extract JSON metrics payload
-            metrics_match = re.search(r'--- JSON_METRICS_START ---\n(.*?)\n--- JSON_METRICS_END ---', process.stdout, re.DOTALL)
+            metrics_match = re.search(r'--- JSON_METRICS_START ---\n(.*?)\n--- JSON_METRICS_END ---', full_output_str, re.DOTALL)
             
             if metrics_match:
                 metrics_data = json.loads(metrics_match.group(1))
@@ -95,8 +107,6 @@ def main():
             print(f"\n✅ Finished {model_name} in {time_taken//60:.0f}m {time_taken%60:.0f}s")
             
         except subprocess.CalledProcessError as e:
-            print(e.stdout)
-            print(e.stderr)
             print(f"\n❌ Error training {model_name}. Skipping to next.")
             results[model_name] = {"status": "Failed"}
             
