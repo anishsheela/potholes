@@ -91,7 +91,7 @@ def main():
     print(f"\nEvaluating on {evaluated_count} mutually available images (Missing: {missing_count}).")
 
     # 4. Generate Statistics
-    CLASSES = ["Excellent", "Fair", "Good", "Poor"]
+    CLASSES = ["Excellent", "Fair", "Good", "Invalid", "Poor"]
     
     acc = accuracy_score(y_true, y_pred)
     print("\n" + "="*50)
@@ -105,7 +105,7 @@ def main():
     cm = confusion_matrix(y_true, y_pred, labels=CLASSES)
     
     # Print custom formatted confusion matrix since pandas is not available
-    header = f"{'True \ Pred':<15} | " + " | ".join([f"{c:<9}" for c in CLASSES])
+    header = f"{'True / Pred':<15} | " + " | ".join([f"{c:<9}" for c in CLASSES])
     print(header)
     print("-" * len(header))
     
