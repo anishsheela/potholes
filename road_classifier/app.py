@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Multi-user Road Condition Classifier
-Features: Consensus Review Mode, Active Learning Support, Undo, Leaderboard
+Features: Consensus Review Mode, Active Learning Support, Undo, Gamified Leaderboard & Streaks
 """
 
 from flask import Flask, render_template_string, request, jsonify, send_from_directory
@@ -21,13 +21,6 @@ args, unknown = parser.parse_known_args()
 
 IMAGES_DIR = args.data_dir
 DB_PATH = 'classifications.db'
-
-# Reward thresholds and achievements
-ACHIEVEMENTS = {
-    'first_label': {'name': '🎯 First Steps', 'description': 'Classified your first image', 'points': 10},
-    'speed_demon': {'name': '⚡ Speed Demon', 'description': 'Classified 10 images in under 5 minutes', 'points': 50},
-    'consistency': {'name': '⭐ Analyst', 'description': 'Completed 50 consensus reviews', 'points': 100},
-}
 
 def init_db():
     conn = sqlite3.connect(DB_PATH)
@@ -49,7 +42,17 @@ def init_db():
                   points INTEGER DEFAULT 0,
                   achievements TEXT DEFAULT '[]',
                   session_count INTEGER DEFAULT 0,
-                  last_active DATETIME)''')
+                  last_active DATETIME,
+                  current_streak INTEGER DEFAULT 0,
+                  max_streak INTEGER DEFAULT 0)''')
+                  
+    # Retrofit existing dbs
+    try:
+        c.execute('ALTER TABLE users ADD COLUMN current_streak INTEGER DEFAULT 0')
+        c.execute('ALTER TABLE users ADD COLUMN max_streak INTEGER DEFAULT 0')
+    except sqlite3.OperationalError:
+        pass # Columns already exist
+
     conn.commit()
     conn.close()
 
@@ -71,10 +74,6 @@ def get_all_images():
 def get_next_image(username):
     """
     CONSENSUS REVIEW MODE
-    Requirements for an image to be 'Available':
-    1. The current user has not labeled it.
-    2. It does not already have 2 matching labels from ANY users.
-    Prioritizes images that already have 1 label to finalize consensus quickly.
     """
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
@@ -117,7 +116,6 @@ def get_next_image(username):
             if len(users_who_classified) > 0:
                 partially_done.append(img)
     
-    # Priority: Images that just need one more vote to finish consensus
     if partially_done:
         return random.choice(partially_done)
     if available:
@@ -142,24 +140,103 @@ def clear_active_session(username):
 def save_classification(image_name, label, username, time_taken):
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
+    
+    # 1. Look up existing classifications for this image
+    c.execute('SELECT username, label FROM classifications WHERE image_name = ?', (image_name,))
+    existing = c.fetchall()
+    
+    # 2. Insert the new classification
     c.execute('''INSERT INTO classifications (image_name, label, username, time_taken)
                  VALUES (?, ?, ?, ?)''', (image_name, label, username, time_taken))
-    c.execute('''INSERT INTO users (username, total_labels, last_active)
-                 VALUES (?, 1, ?)
+                 
+    new_achievements = []
+    points_earned = 0
+    streak_active = False
+    resolved_tie = False
+    matching_users = []
+    
+    if not existing:
+        # First person to classify.
+        # We don't break their streak because they don't know if they are right or wrong yet
+        streak_active = True
+        pass
+    else:
+        # 2nd or 3rd person
+        matching_users = [row[0] for row in existing if row[1] == label]
+        disagreeing_users = [row[0] for row in existing if row[1] != label]
+        
+        if matching_users:
+            points_earned = 10
+            # If there was a disagreement previously, we just broke the tie!
+            if disagreeing_users:
+                points_earned = 50
+                resolved_tie = True
+            streak_active = True
+            # Retroactively reward the users we agreed with
+            for m_user in matching_users:
+                c.execute('UPDATE users SET points = points + 10 WHERE username = ?', (m_user,))
+        else:
+            # Disagreement! Break our streak
+            c.execute('UPDATE users SET current_streak = 0 WHERE username = ?', (username,))
+            streak_active = False
+            
+    # Update current user stats
+    c.execute('''INSERT INTO users (username, total_labels, last_active, points, current_streak, max_streak)
+                 VALUES (?, 1, ?, ?, ?, ?)
                  ON CONFLICT(username) DO UPDATE SET
                  total_labels = total_labels + 1,
-                 last_active = ?''', (username, datetime.now(), datetime.now()))
-    c.execute('SELECT total_labels FROM users WHERE username = ?', (username,))
-    total_labels = c.fetchone()[0]
+                 last_active = ?,
+                 points = points + ?,
+                 current_streak = CASE WHEN ? THEN current_streak + 1 ELSE 0 END,
+                 max_streak = CASE WHEN ? AND (current_streak + 1 > max_streak) THEN current_streak + 1 ELSE max_streak END
+                 ''', (username, datetime.now(), points_earned, 1 if streak_active else 0, 1 if streak_active else 0,
+                       datetime.now(), points_earned, streak_active, streak_active))
+                       
+    # Fetch new achievements / stats
+    c.execute('SELECT points, current_streak, max_streak, achievements FROM users WHERE username = ?', (username,))
+    row = c.fetchone()
+    current_points, current_streak, max_streak, ach_str = row
+    current_achievements = json.loads(ach_str) if ach_str else []
+    
+    # Check new achievements
+    if resolved_tie and 'tie_breaker' not in current_achievements:
+        ach = {'id': 'tie_breaker', 'name': '⚖️ The Judge', 'description': 'Resolved a tied consensus', 'points': 50}
+        new_achievements.append(ach)
+        c.execute('UPDATE users SET points = points + 50 WHERE username = ?', (username,))
+        current_achievements.append('tie_breaker')
+        points_earned += 50
+        
+    if current_streak >= 10 and 'streak_10' not in current_achievements:
+        ach = {'id': 'streak_10', 'name': '🔥 On Fire', 'description': '10 Consensus Matches in a Row!', 'points': 100}
+        new_achievements.append(ach)
+        c.execute('UPDATE users SET points = points + 100 WHERE username = ?', (username,))
+        current_achievements.append('streak_10')
+        points_earned += 100
+        
+    if current_streak >= 50 and 'perfectionist' not in current_achievements:
+        ach = {'id': 'perfectionist', 'name': '👑 Perfectionist', 'description': '50 Match Streak', 'points': 500}
+        new_achievements.append(ach)
+        c.execute('UPDATE users SET points = points + 500 WHERE username = ?', (username,))
+        current_achievements.append('perfectionist')
+        points_earned += 500
+        
+    if new_achievements:
+        c.execute('UPDATE users SET achievements = ? WHERE username = ?', (json.dumps(current_achievements), username))
+        
     conn.commit()
     conn.close()
-    # Mocking achievements for now
-    return []
+    
+    return {
+        'points_earned': points_earned, 
+        'current_streak': current_streak if streak_active else 0,
+        'new_achievements': new_achievements,
+        'consensus_reached': True if matching_users else False,
+        'streak_active': streak_active
+    }
 
 def get_stats():
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
-    
     all_images = get_all_images()
     total_images = len(all_images)
     
@@ -180,16 +257,10 @@ def get_stats():
                 consensus_count += 1
                 break
                 
-    total_users = 0
-    c.execute('SELECT COUNT(DISTINCT username) FROM users')
-    row = c.fetchone()
-    if row: total_users = row[0]
-    
-    c.execute('SELECT label, COUNT(*) FROM classifications GROUP BY label')
-    label_distribution = {row[0]: row[1] for row in c.fetchall()}
-    
+    active_users = 0
     c.execute('SELECT COUNT(*) FROM active_sessions WHERE current_image IS NOT NULL')
-    active_users = c.fetchone()[0]
+    row = c.fetchone()
+    if row: active_users = row[0]
     conn.close()
     
     return {
@@ -197,11 +268,27 @@ def get_stats():
         'classified': consensus_count,
         'remaining': total_images - consensus_count,
         'progress_percent': round((consensus_count / total_images * 100) if total_images > 0 else 0, 1),
-        'total_users': total_users,
-        'active_users': active_users,
-        'label_distribution': label_distribution,
-        'raw_classifications': len(rows)
+        'active_users': active_users
     }
+
+def get_leaderboard():
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute('''SELECT username, total_labels, points, current_streak, max_streak, achievements
+                 FROM users ORDER BY points DESC, total_labels DESC LIMIT 10''')
+    leaderboard = []
+    for row in c.fetchall():
+        achievements = json.loads(row[5]) if row[5] else []
+        leaderboard.append({
+            'username': row[0],
+            'total_labels': row[1],
+            'points': row[2],
+            'current_streak': row[3],
+            'max_streak': row[4],
+            'achievements_count': len(achievements)
+        })
+    conn.close()
+    return leaderboard
 
 @app.route('/')
 def index():
@@ -211,7 +298,6 @@ def index():
 def next_image():
     username = request.json.get('username', 'Anonymous')
     if not username: return jsonify({'error': 'Username required'}), 400
-    
     image = get_next_image(username)
     if image:
         update_active_session(username, image)
@@ -225,9 +311,9 @@ def classify():
     data = request.json
     if not all([data.get('image'), data.get('label'), data.get('username')]):
         return jsonify({'error': 'Missing required fields'}), 400
-    save_classification(data['image'], data['label'], data['username'], data.get('time_taken'))
+    res = save_classification(data['image'], data['label'], data['username'], data.get('time_taken'))
     clear_active_session(data['username'])
-    return jsonify({'success': True, 'new_achievements': []})
+    return jsonify({'success': True, 'result': res})
 
 @app.route('/api/undo', methods=['POST'])
 def undo():
@@ -247,14 +333,13 @@ def undo():
     conn.close()
     return jsonify({'success': False, 'error': 'No recent actions to undo.'})
 
-@app.route('/api/skip', methods=['POST'])
-def skip_image():
-    clear_active_session(request.json.get('username', 'Anonymous'))
-    return jsonify({'success': True})
-
 @app.route('/api/stats')
 def stats():
     return jsonify(get_stats())
+
+@app.route('/api/leaderboard')
+def leaderboard_api():
+    return jsonify(get_leaderboard())
 
 @app.route('/images/<path:filename>')
 def serve_image(filename):
@@ -273,91 +358,162 @@ HTML_TEMPLATE = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Road Classifier</title>
+    <title>Road Classifier - Gamified Consensus</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: -apple-system, sans-serif; background: #f0f2f5; color: #333; padding: 20px; }
-        .container { max-width: 1400px; margin: 0 auto; }
-        .panel { background: white; border-radius: 15px; padding: 30px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+        .container { max-width: 1400px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+        .panel { background: white; border-radius: 15px; padding: 25px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
         .header { text-align: center; margin-bottom: 20px; }
-        .header h1 { color: #2c3e50; }
-        .btn { background: #3498db; color: white; border: none; padding: 12px 30px; border-radius: 8px; font-size: 1.1rem; cursor: pointer; }
-        .btn:hover { background: #2980b9; }
+        .header h1 { color: #2c3e50; font-size: 2.2rem;}
+        .btn { background: #3498db; color: white; border: none; padding: 12px 30px; border-radius: 8px; font-size: 1.1rem; cursor: pointer; transition: transform 0.1s;}
+        .btn:active { transform: scale(0.95); }
         
-        .image-container { text-align: center; min-height: 500px; display: flex; align-items: center; justify-content: center; background: #e0e0e0; border-radius: 10px; margin: 20px 0; }
+        /* Two Column Layout */
+        .main-grid { display: grid; grid-template-columns: 3fr 1fr; gap: 20px; }
+        @media (max-width: 1024px) { .main-grid { grid-template-columns: 1fr; } }
+
+        .image-container { text-align: center; min-height: 500px; display: flex; align-items: center; justify-content: center; background: #e0e0e0; border-radius: 10px; margin: 20px 0; position: relative;}
         .image-container img { max-width: 100%; max-height: 70vh; border-radius: 5px; }
 
-        .btn-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 15px; margin-bottom: 20px; }
-        .class-btn { padding: 20px; font-size: 1.2rem; font-weight: bold; border: none; border-radius: 12px; cursor: pointer; transition: transform 0.1s; position: relative; color: white; }
+        .btn-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 20px; }
+        .class-btn { padding: 15px 10px; font-size: 1.1rem; font-weight: bold; border: none; border-radius: 12px; cursor: pointer; transition: transform 0.1s; position: relative; color: white; }
         .class-btn:active { transform: scale(0.95); }
-        .shortcut { position: absolute; top: 10px; right: 10px; font-size: 0.8rem; background: rgba(0,0,0,0.3); padding: 4px 8px; border-radius: 4px; }
+        .shortcut { position: absolute; top: 5px; right: 5px; font-size: 0.75rem; background: rgba(0,0,0,0.3); padding: 3px 6px; border-radius: 4px; }
         
         .excellent { background: #27ae60; }
         .good { background: #f1c40f; color: #333; }
         .fair { background: #e67e22; }
         .poor { background: #c0392b; }
         .invalid { background: #7f8c8d; }
+        .util-btn { background: #bdc3c7; color: #333; padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;}
+        .util-btn:hover { background: #95a5a6; }
 
-        .util-btn { background: #bdc3c7; color: #333; padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; }
+        /* Streak UI */
+        .streak-container { font-size: 1.5rem; font-weight: bold; color: #e67e22; opacity: 0; transition: opacity 0.3s; text-align: right; margin-bottom: 10px;}
+        .streak-container.on-fire { opacity: 1; animation: pulse 1s infinite alternate; }
+        @keyframes pulse { 0% { transform: scale(1); } 100% { transform: scale(1.05); color: #c0392b; }}
+
+        /* Achievements Popup */
+        .toast-container { position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 10px; z-index: 1000; }
+        .toast { background: white; border-left: 5px solid #27ae60; padding: 15px 25px; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); animation: slideIn 0.3s forwards, shrinkOut 0.3s 4s forwards; }
+        .toast h4 { margin: 0 0 5px 0; color: #2c3e50; }
+        .toast p { margin: 0; font-size: 0.9rem; color: #7f8c8d; }
+        @keyframes slideIn { from{ transform: translateX(110%); } to{ transform: translateX(0); } }
+        @keyframes shrinkOut { from{ opacity: 1; transform: scale(1); } to{ opacity: 0; transform: scale(0.8); } }
+
+        /* Leaderboard */
+        .lb-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; margin-bottom: 8px; background: #f8f9fa; border-radius: 8px; }
+        .lb-rank { font-weight: bold; font-size: 1.2rem; width: 30px; }
+        .lb-name { flex-grow: 1; font-weight: 600; }
+        .lb-stats { text-align: right; }
+        .lb-pts { color: #27ae60; font-weight: bold; font-size: 1.1rem; }
+        .lb-streak { color: #e67e22; font-size: 0.8rem; font-weight: bold; }
+
+        .guidelines { margin-top: 20px; padding: 20px; background: #e8f4fd; border-radius: 8px; }
+        .rules-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-top: 15px; }
+        .rule-card { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); border: 1px solid #dce4ec; display: flex; flex-direction: column; }
+        .rule-card h4 { margin-bottom: 5px; font-size: 1.1rem; }
+        .rule-card h4.exc { color: #27ae60; }
+        .rule-card h4.gd { color: #f39c12; }
+        .rule-card h4.fr { color: #d35400; }
+        .rule-card h4.pr { color: #c0392b; }
+        .rule-card h4.inv { color: #7f8c8d; }
+        .rule-card p { font-size: 0.9rem; color: #555; flex-grow: 1; }
+        .rule-card img { width: 100%; height: 110px; object-fit: cover; border-radius: 6px; margin-top: 10px; cursor: pointer; transition: transform 0.2s; border: 1px solid #eee; }
+        .rule-card img:hover { transform: scale(1.03); box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
         
-        .guidelines { margin-top: 30px; padding: 20px; background: #e8f4fd; border-left: 5px solid #3498db; border-radius: 5px; }
-        .guideline-images { display: flex; gap: 15px; margin-top: 15px; overflow-x: auto;}
-        .guideline-images img { height: 150px; border-radius: 8px; border: 2px solid #ccc; }
+        /* Lightbox */
+        #lightbox { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 9999; align-items: center; justify-content: center; cursor: pointer; }
+        #lightbox img { max-width: 90%; max-height: 90%; border-radius: 8px; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
         
-        .progress-bar { background: #ddd; height: 20px; border-radius: 10px; overflow: hidden; margin-bottom: 20px; }
-        .progress-fill { background: #27ae60; height: 100%; width: 0%; transition: 0.3s; text-align: center; color: white; font-size: 0.8rem; font-weight: bold;}
+        .progress-bar { background: #ddd; height: 15px; border-radius: 8px; overflow: hidden; margin-bottom: 10px; }
+        .progress-fill { background: #3498db; height: 100%; width: 0%; transition: width 0.3s; text-align: center; color: white; font-size: 0.7rem; font-weight: bold; line-height: 15px; }
     </style>
 </head>
 <body>
+<div class="toast-container" id="toast-container"></div>
+
+<div id="lightbox" onclick="closeLightbox()">
+    <img id="lightbox-img" src="">
+</div>
+
 <div class="container">
     <div id="login-screen" class="panel">
         <div class="header">
-            <h1>Road Condition Consensus Annotator</h1>
-            <p>Enter your username to begin auditing images.</p>
+            <h1>🚦 Road Validation: Consensus & Glory</h1>
+            <p>You only earn points if someone else agrees with you. Be accurate.</p>
         </div>
         <div style="text-align: center; margin: 30px 0;">
-            <input type="text" id="username-input" placeholder="Your Name" style="padding: 12px; font-size: 1.1rem; border-radius: 6px; border: 1px solid #ccc;">
-            <button class="btn" onclick="start()">Start Annotating</button>
+            <input type="text" id="username-input" placeholder="Enter your name" style="padding: 12px; font-size: 1.1rem; border-radius: 6px; border: 1px solid #ccc;">
+            <button class="btn" onclick="start()">Join the Fight</button>
         </div>
 
         <div class="guidelines">
-            <h2>Annotation Guidelines</h2>
-            <ul>
-                <li><b>Excellent:</b> Flawless, new road. No patches/cracks.</li>
-                <li><b>Good:</b> Minor wear, hairline cracks. Perfectly comfortable.</li>
-                <li><b>Fair:</b> Noticeable bumps/patches. You feel it, but no swerving.</li>
-                <li><b>Poor:</b> Severe damage. Deep potholes requiring braking/swerving.</li>
-                <li><b>Invalid:</b> Pitch black, heavy rain, sky, garage, non-road.</li>
-            </ul>
-            <div class="guideline-images">
-                <div><i>Excellent Validation</i><br><img src="/sample/excellent.jpg" onerror="this.style.display='none'"></div>
-                <div><i>Good Validation</i><br><img src="/sample/good.jpg" onerror="this.style.display='none'"></div>
-                <div><i>Fair Validation</i><br><img src="/sample/fair.jpg" onerror="this.style.display='none'"></div>
-                <div><i>Poor Validation</i><br><img src="/sample/poor.jpg" onerror="this.style.display='none'"></div>
+            <h2 style="text-align: center; color: #2c3e50;">The Rules of the Road</h2>
+            <div class="rules-grid">
+                <div class="rule-card">
+                    <h4 class="exc">✨ Excellent</h4>
+                    <p>Flawless, new road. No patches/cracks.</p>
+                    <img src="/sample/excellent.jpg" onclick="openLightbox(this.src)" onerror="this.style.display='none'">
+                </div>
+                <div class="rule-card">
+                    <h4 class="gd">✅ Good</h4>
+                    <p>Minor wear, hairline cracks. Perfectly comfortable.</p>
+                    <img src="/sample/good.jpg" onclick="openLightbox(this.src)" onerror="this.style.display='none'">
+                </div>
+                <div class="rule-card">
+                    <h4 class="fr">⚠️ Fair</h4>
+                    <p>Noticeable bumps/patches. You feel it, no swerving.</p>
+                    <img src="/sample/fair.jpg" onclick="openLightbox(this.src)" onerror="this.style.display='none'">
+                </div>
+                <div class="rule-card">
+                    <h4 class="pr">❌ Poor</h4>
+                    <p>Severe damage. Deep potholes requiring braking.</p>
+                    <img src="/sample/poor.jpg" onclick="openLightbox(this.src)" onerror="this.style.display='none'">
+                </div>
+                <div class="rule-card">
+                    <h4 class="inv">🚫 Invalid</h4>
+                    <p>Pitch black, heavy rain, sky, garage, non-road.</p>
+                    <img src="/sample/invalid.jpg" onclick="openLightbox(this.src)" onerror="this.style.display='none'">
+                </div>
             </div>
-            <p style="margin-top: 10px; color: #c0392b;"><i>Note: This system runs in Consensus Mode. Images require 2 matching labels from different users to finalize.</i></p>
         </div>
     </div>
 
-    <div id="classifier-screen" style="display: none;">
-        <div class="progress-bar"><div class="progress-fill" id="progress-fill">0%</div></div>
-        
+    <div id="classifier-screen" class="main-grid" style="display: none;">
+        <!-- Left Column: Classifier -->
         <div class="panel">
+            <div style="display: flex; justify-content: space-between; align-items: flex-end;">
+                <div style="flex-grow: 1; padding-right: 20px;">
+                    <div style="font-size: 0.9rem; margin-bottom: 5px; color: #7f8c8d;">Consensus Progress: <span id="stat-completed">0</span> Images</div>
+                    <div class="progress-bar"><div class="progress-fill" id="progress-fill">0%</div></div>
+                </div>
+                <div class="streak-container" id="streak-counter">🔥 Streak: <span id="streak-val">0</span></div>
+            </div>
+            
             <div class="btn-grid">
                 <button class="class-btn excellent" onclick="classify('Excellent')"><span class="shortcut">Q</span>✨ Excellent</button>
                 <button class="class-btn good" onclick="classify('Good')"><span class="shortcut">W</span>✅ Good</button>
                 <button class="class-btn fair" onclick="classify('Fair')"><span class="shortcut">E</span>⚠️ Fair</button>
                 <button class="class-btn poor" onclick="classify('Poor')"><span class="shortcut">R</span>❌ Poor</button>
-                <button class="class-btn invalid" onclick="classify('Invalid')"><span class="shortcut">T / Space</span>🚫 Invalid</button>
+                <button class="class-btn invalid" onclick="classify('Invalid')"><span class="shortcut">T / Sp</span >🚫 Invalid</button>
             </div>
 
-            <div style="display: flex; justify-content: space-between;">
-                <button class="util-btn" onclick="undoLast()"><span style="font-weight:bold;">Z / Backspace</span> ↩️ Undo Last</button>
-                <div style="font-weight: bold; color: #3498db;">Consensus Completed: <span id="stat-completed">0</span></div>
-            </div>
+            <button class="util-btn" onclick="undoLast()">↩️ Undo Last (Z / Backspace)</button>
 
-            <div class="image-container" id="image-container">
-                <p>Loading...</p>
+            <div class="image-container" id="image-container"><p>Loading...</p></div>
+        </div>
+
+        <!-- Right Column: Leaderboard -->
+        <div class="panel" style="padding: 15px;">
+            <h3 style="margin-bottom: 15px; color: #2c3e50; text-align: center;">🏆 Top Annotators</h3>
+            <div id="leaderboard-container">
+                <p style="text-align: center; color: #999;">Loading...</p>
+            </div>
+            <hr style="margin: 20px 0; border: 0; border-top: 1px solid #eee;">
+            <div style="text-align: center; font-size: 0.9rem; color: #7f8c8d;">
+                Active Users: <strong id="active-users-count">0</strong>
             </div>
         </div>
     </div>
@@ -373,10 +529,12 @@ HTML_TEMPLATE = """
         if(!val) return;
         username = val;
         document.getElementById('login-screen').style.display = 'none';
-        document.getElementById('classifier-screen').style.display = 'block';
+        document.getElementById('classifier-screen').style.display = 'grid'; // because main-grid
         loadNextImage();
         updateStats();
+        updateLeaderboard();
         setInterval(updateStats, 5000);
+        setInterval(updateLeaderboard, 10000);
     }
 
     async function loadNextImage() {
@@ -397,14 +555,50 @@ HTML_TEMPLATE = """
         } catch(e) { console.error(e); }
     }
 
+    function showToast(title, msg) {
+        const cont = document.getElementById('toast-container');
+        const d = document.createElement('div');
+        d.className = 'toast';
+        d.innerHTML = `<h4>${title}</h4><p>${msg}</p>`;
+        cont.appendChild(d);
+        setTimeout(() => cont.removeChild(d), 4500);
+    }
+
+    function handleResult(res) {
+        const streakEl = document.getElementById('streak-counter');
+        const streakVal = document.getElementById('streak-val');
+        
+        // Update Streak UI
+        if(res.streak_active && res.current_streak > 0) {
+            streakEl.classList.add('on-fire');
+            streakVal.innerText = res.current_streak;
+        } else {
+            streakEl.classList.remove('on-fire');
+        }
+
+        // Show generic Consensus Toast if points earned but no big achievement mapping
+        if(res.consensus_reached && res.points_earned > 0) {
+            showToast("✅ Consensus Reached!", `You matched someone! +${res.points_earned} Points`);
+        }
+
+        // Show Achievements
+        if(res.new_achievements && res.new_achievements.length > 0) {
+            for(let ach of res.new_achievements) {
+                showToast(ach.name, `${ach.description} (+${ach.points} Pts)`);
+            }
+        }
+    }
+
     async function classify(label) {
         if(!currentImage) return;
         const timeTaken = (Date.now() - startTime)/1000;
         try {
-            await fetch('/api/classify', {
+            const req = await fetch('/api/classify', {
                 method: 'POST', headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({image: currentImage, label, username, time_taken: timeTaken})
             });
+            const body = await req.json();
+            if(body.success) handleResult(body.result);
             loadNextImage();
             updateStats();
         } catch(e) { console.error(e); }
@@ -421,9 +615,10 @@ HTML_TEMPLATE = """
                 currentImage = data.image;
                 document.getElementById('image-container').innerHTML = `<img src="${data.url}">`;
                 startTime = Date.now();
+                showToast("Undo Successful", "Your last vote was deleted.");
                 updateStats();
             } else {
-                alert("Nothing to undo!");
+                showToast("Nothing to Undo", "No recent actions found.");
             }
         } catch(e) { console.error(e); }
     }
@@ -433,12 +628,54 @@ HTML_TEMPLATE = """
             const res = await fetch('/api/stats');
             const data = await res.json();
             document.getElementById('stat-completed').innerText = `${data.classified} / ${data.total_images}`;
+            document.getElementById('active-users-count').innerText = data.active_users;
             document.getElementById('progress-fill').style.width = `${data.progress_percent}%`;
             document.getElementById('progress-fill').innerText = `${data.progress_percent}%`;
         } catch(e) { console.error(e); }
     }
 
+    async function updateLeaderboard() {
+        try {
+            const res = await fetch('/api/leaderboard');
+            const data = await res.json();
+            const lb = document.getElementById('leaderboard-container');
+            if(data.length === 0) {
+                lb.innerHTML = '<p style="text-align: center; color: #999;">No contenders yet.</p>';
+                return;
+            }
+            lb.innerHTML = data.map((u, i) => {
+                const rankIcon = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i+1}.`;
+                return `
+                    <div class="lb-item">
+                        <div class="lb-rank">${rankIcon}</div>
+                        <div class="lb-name">${u.username}<br><span style="font-size:0.75rem; color:#aaa">${u.total_labels} labeled</span></div>
+                        <div class="lb-stats">
+                            <div class="lb-pts">${u.points} pts</div>
+                            <div class="lb-streak">🔥 Max: ${u.max_streak}</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        } catch(e) { console.error(e); }
+    }
+
+    function openLightbox(src) {
+        document.getElementById('lightbox-img').src = src;
+        document.getElementById('lightbox').style.display = 'flex';
+    }
+
+    function closeLightbox() {
+        document.getElementById('lightbox').style.display = 'none';
+        document.getElementById('lightbox-img').src = '';
+    }
+
     document.addEventListener('keydown', (e) => {
+        // Prevent hotkeys if lightbox is open
+        if(document.getElementById('lightbox').style.display === 'flex') {
+            if(e.key === 'Escape') closeLightbox();
+            return;
+        }
+
         if(document.getElementById('login-screen').style.display !== 'none') return;
         
         switch(e.key.toLowerCase()) {
@@ -459,6 +696,7 @@ HTML_TEMPLATE = """
 
 if __name__ == '__main__':
     init_db()
-    print("🚀 Road Consensus Classifier Starting!")
+    print("🚀 Gamified Road Consensus Classifier Starting!")
     print(f"📁 Root Data Directory: {IMAGES_DIR}")
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    print(f"🌐 Access locally via http://localhost:5001")
+    app.run(host='0.0.0.0', port=5001, debug=True)
