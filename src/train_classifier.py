@@ -2,6 +2,8 @@ import os
 import argparse
 import time
 from collections import Counter
+import numpy as np
+from sklearn.model_selection import GroupShuffleSplit
 
 import torch
 import torch.nn as nn
@@ -30,7 +32,25 @@ def parse_args():
                         help='Merge Excellent/Good into Good, Fair/Poor into Bad for binary classification')
     parser.add_argument('--use-class-weights', action='store_true', 
                         help='Use weighted CrossEntropyLoss to handle class imbalance')
+    parser.add_argument('--val-split', type=float, default=0.3, help='Validation split ratio')
+    parser.add_argument('--seed', type=int, default=42, help='Random seed for reproducibility')
+    parser.add_argument('--patience', type=int, default=3, help='Early stopping patience (epochs)')
     return parser.parse_args()
+
+class DatasetWithTransform(torch.utils.data.Dataset):
+    """Wrapper to apply specific transform to a subset"""
+    def __init__(self, subset, transform=None):
+        self.subset = subset
+        self.transform = transform
+        
+    def __len__(self):
+        return len(self.subset)
+        
+    def __getitem__(self, idx):
+        x, y = self.subset[idx]
+        if self.transform:
+            x = self.transform(x)
+        return x, y
 
 class MergedDataset(torch.utils.data.Dataset):
     """Wrapper to merge specific classes dynamically"""
@@ -64,6 +84,9 @@ def get_model(model_name, num_classes):
 def main():
     args = parse_args()
     
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    
     # Check for ROCm GPU (AMD) / CUDA
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     if torch.cuda.is_available():
@@ -75,7 +98,7 @@ def main():
     # ViT usually expects 224x224
     img_size = 224
     
-    data_transforms = transforms.Compose([
+    train_transforms = transforms.Compose([
         transforms.Resize((img_size, img_size)),
         transforms.RandomHorizontalFlip(),
         transforms.RandomRotation(10),
@@ -83,12 +106,18 @@ def main():
         transforms.ToTensor(),
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
     ])
-
-    # Load dataset
-    print(f"Loading dataset from {args.data_dir}...")
-    dataset = datasets.ImageFolder(args.data_dir, transform=data_transforms)
     
-    classes = dataset.classes
+    val_transforms = transforms.Compose([
+        transforms.Resize((img_size, img_size)),
+        transforms.ToTensor(),
+        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+    ])
+
+    # Load dataset WITHOUT transforms first to preserve PIL Images for custom subset
+    print(f"Loading dataset from {args.data_dir}...")
+    dataset_full = datasets.ImageFolder(args.data_dir, transform=None)
+    
+    classes = dataset_full.classes
     num_classes = len(classes)
     
     print(f"Original Classes found: {classes}")
@@ -102,32 +131,65 @@ def main():
             'Fair': 'Bad',
             'Poor': 'Bad'
         }
-        dataset = MergedDataset(dataset, merge_mapping)
-        classes = dataset.classes
+        dataset_full = MergedDataset(dataset_full, merge_mapping)
+        classes = dataset_full.classes
         num_classes = len(classes)
         print(f"New Merged Classes: {classes}")
         
-        # Calculate new label distributions for weights
-        labels = [dataset[i][1] for i in range(len(dataset))]
+    # Get labels for split/weights
+    if args.merge_classes:
+        labels = [dataset_full[i][1] for i in range(len(dataset_full))]
     else:
-        labels = [label for _, label in dataset.imgs]
+        labels = [label for _, label in dataset_full.samples]
 
-    # Calculate class weights for imbalance
-    class_counts = Counter(labels)
-    print("\nClass Distribution:")
+    # Calculate grouping for Train/Val split
+    groups = []
+    # If MergedDataset is used, the core ImageFolder is inside .dataset
+    core_samples = dataset_full.dataset.samples if args.merge_classes else dataset_full.samples
+    for path, _ in core_samples:
+        filename = os.path.basename(path)
+        if '_frame_' in filename:
+            video_id = filename.split('_frame_')[0]
+        else:
+            video_id = filename
+        groups.append(video_id)
+
+    # Perform grouped split
+    print(f"Splitting dataset with validation split {args.val_split} based on {len(set(groups))} unique videos...")
+    gss = GroupShuffleSplit(n_splits=1, test_size=args.val_split, random_state=args.seed)
+    
+    try:
+        train_idx, val_idx = next(gss.split(range(len(dataset_full)), labels, groups))
+    except ValueError as e:
+        print("Warning: GroupShuffleSplit failed (likely too few groups). Falling back to basic random split.")
+        from sklearn.model_selection import train_test_split
+        train_idx, val_idx = train_test_split(range(len(dataset_full)), test_size=args.val_split, random_state=args.seed, stratify=labels)
+
+    train_subset = torch.utils.data.Subset(dataset_full, train_idx)
+    val_subset = torch.utils.data.Subset(dataset_full, val_idx)
+
+    train_dataset = DatasetWithTransform(train_subset, transform=train_transforms)
+    val_dataset = DatasetWithTransform(val_subset, transform=val_transforms)
+
+    print(f"Split Dataset: {len(train_dataset)} train images, {len(val_dataset)} validation images.")
+
+    # Calculate class weights for imbalance (USING ONLY TRAINING DATA)
+    train_labels = [labels[i] for i in train_idx]
+    class_counts = Counter(train_labels)
+    print("\nTraining Class Distribution:")
     for i, c in enumerate(classes):
         print(f"  {c}: {class_counts[i]} images")
         
     class_weights = None
     if args.use_class_weights:
-        # Inverse class frequency
         total_samples = sum(class_counts.values())
         weights = [total_samples / class_counts[i] for i in range(num_classes)]
         class_weights = torch.FloatTensor(weights).to(device)
         print(f"Computed Class Weights: {weights}")
         
-    # DataLoader
-    dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=4)
+    # DataLoaders
+    train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=4)
+    val_dataloader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=4)
 
     # Initialize Model
     model = get_model(args.model, num_classes)
@@ -142,70 +204,113 @@ def main():
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
     # Training Loop
-    print(f"\nStarting training {args.model} for {args.epochs} epochs...")
+    print(f"\nStarting training {args.model} for max {args.epochs} epochs with patience {args.patience}...")
     start_time = time.time()
     
+    best_val_loss = float('inf')
+    patience_counter = 0
+    final_epoch_acc = 0
+    final_epoch_precision = 0
+    final_epoch_recall = 0
+    final_epoch_f1 = 0
+    epochs_trained = 0
+    
+    os.makedirs('models', exist_ok=True)
+    best_model_path = f"models/{args.model}_best.pth"
+
     for epoch in range(args.epochs):
+        # TRAIN PHASE
         model.train()
-        running_loss = 0.0
-        correct = 0
-        total = 0
+        running_train_loss = 0.0
+        train_correct = 0
+        train_total = 0
         
-        all_targets = []
-        all_preds = []
-        
-        progress_bar = tqdm(dataloader, desc=f"Epoch {epoch+1}/{args.epochs}")
+        progress_bar = tqdm(train_dataloader, desc=f"Epoch {epoch+1}/{args.epochs} [Train]")
         for inputs, targets in progress_bar:
             inputs, targets = inputs.to(device), targets.to(device)
-            
             optimizer.zero_grad()
-            
             outputs = model(inputs)
             loss = criterion(outputs, targets)
-            
             loss.backward()
             optimizer.step()
             
-            running_loss += loss.item() * inputs.size(0)
+            running_train_loss += loss.item() * inputs.size(0)
             _, predicted = outputs.max(1)
-            total += targets.size(0)
-            correct += predicted.eq(targets).sum().item()
+            train_total += targets.size(0)
+            train_correct += predicted.eq(targets).sum().item()
+            progress_bar.set_postfix({'loss': loss.item(), 'acc': 100.*train_correct/train_total})
             
-            all_targets.extend(targets.cpu().numpy())
-            all_preds.extend(predicted.cpu().numpy())
-            
-            progress_bar.set_postfix({'loss': loss.item(), 'acc': 100.*correct/total})
-            
-        epoch_loss = running_loss / len(dataset)
-        epoch_acc = 100. * correct / total
+        epoch_train_loss = running_train_loss / len(train_dataset)
+        epoch_train_acc = 100. * train_correct / train_total
+
+        # VAL PHASE
+        model.eval()
+        running_val_loss = 0.0
+        val_correct = 0
+        val_total = 0
+        all_val_targets = []
+        all_val_preds = []
+
+        with torch.no_grad():
+            for inputs, targets in tqdm(val_dataloader, desc=f"Epoch {epoch+1}/{args.epochs} [Val]"):
+                inputs, targets = inputs.to(device), targets.to(device)
+                outputs = model(inputs)
+                loss = criterion(outputs, targets)
+                
+                running_val_loss += loss.item() * inputs.size(0)
+                _, predicted = outputs.max(1)
+                val_total += targets.size(0)
+                val_correct += predicted.eq(targets).sum().item()
+                
+                all_val_targets.extend(targets.cpu().numpy())
+                all_val_preds.extend(predicted.cpu().numpy())
+
+        epoch_val_loss = running_val_loss / len(val_dataset)
+        epoch_val_acc = 100. * val_correct / val_total
         
         # Calculate sklearn metrics (macro average for multiclass)
-        epoch_precision = precision_score(all_targets, all_preds, average='macro', zero_division=0)
-        epoch_recall = recall_score(all_targets, all_preds, average='macro', zero_division=0)
-        epoch_f1 = f1_score(all_targets, all_preds, average='macro', zero_division=0)
+        epoch_precision = precision_score(all_val_targets, all_val_preds, average='macro', zero_division=0)
+        epoch_recall = recall_score(all_val_targets, all_val_preds, average='macro', zero_division=0)
+        epoch_f1 = f1_score(all_val_targets, all_val_preds, average='macro', zero_division=0)
         
-        print(f"Epoch {epoch+1} Summary: Loss: {epoch_loss:.4f} | Acc: {epoch_acc:.2f}% | P: {epoch_precision:.4f} | R: {epoch_recall:.4f} | F1: {epoch_f1:.4f}")
+        print(f"Epoch {epoch+1} Summary:")
+        print(f"  Train -> Loss: {epoch_train_loss:.4f} | Acc: {epoch_train_acc:.2f}%")
+        print(f"  Val   -> Loss: {epoch_val_loss:.4f} | Acc: {epoch_val_acc:.2f}% | P: {epoch_precision:.4f} | R: {epoch_recall:.4f} | F1: {epoch_f1:.4f}")
+        
+        epochs_trained += 1
+
+        # EARLY STOPPING CHECK
+        if epoch_val_loss < best_val_loss:
+            best_val_loss = epoch_val_loss
+            patience_counter = 0
+            final_epoch_acc = epoch_val_acc
+            final_epoch_precision = epoch_precision
+            final_epoch_recall = epoch_recall
+            final_epoch_f1 = epoch_f1
+            torch.save(model.state_dict(), best_model_path)
+            print(f"  --> Saved new best model to {best_model_path} (Val Loss: {best_val_loss:.4f})")
+        else:
+            patience_counter += 1
+            print(f"  --> Early stopping patience: {patience_counter}/{args.patience}")
+            if patience_counter >= args.patience:
+                print("Triggered early stopping!")
+                break
         
     time_elapsed = time.time() - start_time
     print(f'\nTraining complete in {time_elapsed // 60:.0f}m {time_elapsed % 60:.0f}s')
-
-    # Save model
-    os.makedirs('models', exist_ok=True)
-    save_path = f"models/{args.model}_epochs{args.epochs}_acc{epoch_acc:.0f}.pth"
-    torch.save(model.state_dict(), save_path)
-    print(f"Model saved to {save_path}")
+    print(f"Best Validation Acc: {final_epoch_acc:.2f}%")
 
     # Output JSON payload at the very end for the tuner script to parse
     final_metrics = {
         "model": args.model,
-        "epochs": args.epochs,
+        "epochs": epochs_trained,
         "lr": args.lr,
         "batch_size": args.batch_size,
         "time_seconds": time_elapsed,
-        "accuracy": epoch_acc,
-        "precision": epoch_precision * 100,
-        "recall": epoch_recall * 100,
-        "f1_score": epoch_f1 * 100
+        "accuracy": final_epoch_acc,
+        "precision": final_epoch_precision * 100,
+        "recall": final_epoch_recall * 100,
+        "f1_score": final_epoch_f1 * 100
     }
     print("\n--- JSON_METRICS_START ---")
     print(json.dumps(final_metrics))

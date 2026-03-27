@@ -26,6 +26,9 @@ def main():
     parser.add_argument('--lr', type=float, default=1e-4, help='Learning rate')
     parser.add_argument('--merge-classes', action='store_true', help='Merge into Binary classification')
     parser.add_argument('--use-class-weights', action='store_true', help='Handle class imbalance')
+    parser.add_argument('--val-split', type=float, default=0.3, help='Validation split ratio')
+    parser.add_argument('--seed', type=int, default=42, help='Random seed for reproducibility')
+    parser.add_argument('--patience', type=int, default=3, help='Early stopping patience')
     
     args = parser.parse_args()
 
@@ -49,7 +52,10 @@ def main():
             "--data-dir", args.data_dir,
             "--epochs", str(args.epochs),
             "--batch-size", str(args.batch_size),
-            "--lr", str(args.lr)
+            "--lr", str(args.lr),
+            "--val-split", str(args.val_split),
+            "--seed", str(args.seed),
+            "--patience", str(args.patience)
         ]
         
         if args.merge_classes:
