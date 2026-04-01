@@ -9,13 +9,16 @@ from datetime import datetime
 
 # List of models specified by the user to tune
 MODELS_TO_TUNE = [
-    'efficientnet_b0',
-    'efficientnet_b1',
-    'efficientnet_b2',
+    # Modern CNNs (proven for fine-grained tasks)
+    'convnext_tiny',
+    'convnext_small',
+    'efficientnetv2_s',
+    
+    # Your current best (keep for comparison)
     'resnet18',
-    'resnet34',
-    'vit_base_patch16_224',
-    'vit_small_patch16_224'
+    
+    # Alternative approaches
+    'swin_tiny_patch4_window7_224',
 ]
 
 def main():
