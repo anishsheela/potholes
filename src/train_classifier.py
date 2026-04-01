@@ -34,6 +34,8 @@ def parse_args():
                         help='Use weighted CrossEntropyLoss to handle class imbalance')
     parser.add_argument('--val-split', type=float, default=0.3, help='Validation split ratio')
     parser.add_argument('--seed', type=int, default=42, help='Random seed for reproducibility')
+    parser.add_argument('--include-invalid', action='store_true',
+                        help='Include Invalid class in training (default: exclude)')
     parser.add_argument('--patience', type=int, default=3, help='Early stopping patience (epochs)')
     return parser.parse_args()
 
@@ -121,6 +123,16 @@ def main():
     num_classes = len(classes)
     
     print(f"Original Classes found: {classes}")
+    
+    # Filter out Invalid class unless explicitly requested
+    if 'Invalid' in classes and not args.include_invalid:
+        print("Filtering out 'Invalid' class from training (use --include-invalid to keep it)...")
+        valid_indices = [i for i, (path, label) in enumerate(dataset_full.samples) 
+                         if dataset_full.classes[label] != 'Invalid']
+        dataset_full = torch.utils.data.Subset(dataset_full, valid_indices)
+        classes = [c for c in classes if c != 'Invalid']
+        num_classes = len(classes)
+        print(f"Training on {num_classes} classes: {classes}")
 
     # Handle Class Merging
     if args.merge_classes:
