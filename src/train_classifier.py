@@ -77,6 +77,30 @@ class MergedDataset(torch.utils.data.Dataset):
         new_label = self.idx_to_new_idx[old_label]
         return img, new_label
 
+class FilteredDataset(torch.utils.data.Dataset):
+    """Dataset wrapper that filters out specific classes and remaps labels"""
+    def __init__(self, dataset, valid_classes):
+        self.dataset = dataset
+        self.valid_classes = valid_classes
+        self.old_to_new = {dataset.class_to_idx[c]: i for i, c in enumerate(valid_classes)}
+        
+        # Filter samples to only include valid classes
+        self.samples = [
+            (path, self.old_to_new[label]) 
+            for path, label in dataset.samples 
+            if dataset.classes[label] in valid_classes
+        ]
+        self.classes = valid_classes
+        self.class_to_idx = {c: i for i, c in enumerate(valid_classes)}
+        
+    def __len__(self):
+        return len(self.samples)
+        
+    def __getitem__(self, idx):
+        path, label = self.samples[idx]
+        img = self.dataset.loader(path)
+        return img, label
+
 def get_model(model_name, num_classes):
     print(f"Loading {model_name} for {num_classes} classes...")
     # Use timm for easy loading of all these architectures with pre-trained weights
@@ -127,10 +151,9 @@ def main():
     # Filter out Invalid class unless explicitly requested
     if 'Invalid' in classes and not args.include_invalid:
         print("Filtering out 'Invalid' class from training (use --include-invalid to keep it)...")
-        valid_indices = [i for i, (path, label) in enumerate(dataset_full.samples) 
-                         if dataset_full.classes[label] != 'Invalid']
-        dataset_full = torch.utils.data.Subset(dataset_full, valid_indices)
-        classes = [c for c in classes if c != 'Invalid']
+        valid_classes = [c for c in classes if c != 'Invalid']
+        dataset_full = FilteredDataset(dataset_full, valid_classes)
+        classes = valid_classes
         num_classes = len(classes)
         print(f"Training on {num_classes} classes: {classes}")
 
