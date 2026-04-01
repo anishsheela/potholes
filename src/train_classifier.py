@@ -21,9 +21,12 @@ def parse_args():
     parser.add_argument('--data-dir', type=str, default='dataset/classification/training', help='Path to dataset directory')
     parser.add_argument('--model', type=str, default='resnet18', 
                         choices=[
-                            'resnet18', 'resnet34', 
+                            'resnet18', 'resnet34', 'resnet50',
                             'efficientnet_b0', 'efficientnet_b1', 'efficientnet_b2',
-                            'vit_base_patch16_224', 'vit_small_patch16_224'
+                            'efficientnetv2_s', 'efficientnetv2_m',
+                            'vit_base_patch16_224', 'vit_small_patch16_224',
+                            'convnext_tiny', 'convnext_small', 'convnext_base',
+                            'swin_tiny_patch4_window7_224', 'swin_small_patch4_window7_224'
                         ], help='Model architecture')
     parser.add_argument('--epochs', type=int, default=15, help='Number of epochs')
     parser.add_argument('--batch-size', type=int, default=32, help='Batch size')
