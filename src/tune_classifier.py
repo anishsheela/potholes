@@ -7,18 +7,21 @@ import json
 import re
 from datetime import datetime
 
-# List of models specified by the user to tune
 MODELS_TO_TUNE = [
-    # Modern CNNs (proven for fine-grained tasks)
+    # Your proven baseline
+    'resnet18',
+    
+    # Modern CNNs (might beat ResNet18)
     'convnext_tiny',
     'convnext_small',
     'efficientnetv2_s',
     
-    # Your current best (keep for comparison)
-    'resnet18',
+    # Vision Transformers (will test separately with more epochs)
+    # 'vit_small_patch16_224',  # <- Train separately
+    # 'vit_base_patch16_224',   # <- Train separately
     
-    # Alternative approaches
-    'swin_tiny_patch4_window7_224',
+    # Hybrid approach
+    'swin_tiny_patch4_window7_224',  # Transformer + CNN locality
 ]
 
 def main():
