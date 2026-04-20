@@ -341,6 +341,17 @@ def stats():
 def leaderboard_api():
     return jsonify(get_leaderboard())
 
+@app.route('/api/contributors')
+def contributors_api():
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute('''SELECT username, total_labels FROM users
+                 WHERE LOWER(username) != 'anish'
+                 ORDER BY total_labels DESC''')
+    result = [{'username': row[0], 'total_labels': row[1]} for row in c.fetchall()]
+    conn.close()
+    return jsonify(result)
+
 @app.route('/images/<path:filename>')
 def serve_image(filename):
     directory = os.path.abspath(os.path.join(IMAGES_DIR, os.path.dirname(filename)))
@@ -433,11 +444,15 @@ HTML_TEMPLATE = """
         /* Thank-you banner */
         .thanks-banner { background: linear-gradient(135deg, #f6d365 0%, #fda085 100%); border-radius: 12px; padding: 30px 35px; margin-bottom: 30px; text-align: center; }
         .thanks-banner h2 { font-size: 1.6rem; color: #fff; margin-bottom: 10px; text-shadow: 0 1px 3px rgba(0,0,0,0.15); }
-        .thanks-banner p { color: rgba(255,255,255,0.95); font-size: 1rem; max-width: 620px; margin: 0 auto 25px auto; line-height: 1.6; }
-        .contributors { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 5px; }
-        .contributor-card { background: rgba(255,255,255,0.35); backdrop-filter: blur(4px); border-radius: 10px; padding: 12px 20px; min-width: 110px; text-align: center; }
-        .contributor-card .c-name { font-weight: 700; font-size: 1rem; color: #fff; text-transform: capitalize; }
-        .contributor-card .c-count { font-size: 0.85rem; color: rgba(255,255,255,0.9); margin-top: 3px; }
+        .thanks-banner p { color: rgba(255,255,255,0.95); font-size: 1rem; max-width: 620px; margin: 0 auto 20px auto; line-height: 1.6; }
+        .thanks-banner .signature { color: rgba(255,255,255,0.85); font-style: italic; font-size: 0.95rem; margin-bottom: 25px; }
+        .contributors { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 5px; }
+        .contributor-card { background: rgba(255,255,255,0.35); backdrop-filter: blur(4px); border-radius: 10px; padding: 10px 16px; text-align: center; max-width: 130px; }
+        .contributor-card .c-name { font-weight: 700; font-size: 0.95rem; color: #fff; text-transform: capitalize; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 110px; }
+        .contributor-card .c-count { font-size: 0.8rem; color: rgba(255,255,255,0.9); margin-top: 2px; }
+        .contributor-card.hidden { display: none; }
+        .see-more-btn { background: rgba(255,255,255,0.25); border: 1px solid rgba(255,255,255,0.6); color: #fff; border-radius: 20px; padding: 6px 18px; font-size: 0.85rem; cursor: pointer; margin-top: 12px; transition: background 0.2s; }
+        .see-more-btn:hover { background: rgba(255,255,255,0.4); }
     </style>
 </head>
 <body>
@@ -452,10 +467,12 @@ HTML_TEMPLATE = """
 
         <div class="thanks-banner">
             <h2>🙏 Thank You to Our Collaborators</h2>
-            <p>This project wouldn't have been possible without your time and careful judgement. Every label you submitted has directly contributed to training an AI model that assesses real road conditions. Your work is now part of the research.</p>
+            <p>This project wouldn't have been possible without your time and careful judgement. Every label you submitted has directly contributed to training an AI model that assesses real road conditions.</p>
+            <p class="signature">Your work is now part of my research. Thank you from the bottom of my heart &mdash; Anish Anilkumar</p>
             <div class="contributors" id="contributors-list">
                 <div class="contributor-card" style="color:rgba(255,255,255,0.7); font-size:0.9rem;">Loading...</div>
             </div>
+            <button class="see-more-btn" id="see-more-btn" style="display:none;" onclick="toggleContributors()"></button>
         </div>
 
         <div class="header">
@@ -542,22 +559,41 @@ HTML_TEMPLATE = """
     let currentImage = null;
     let startTime = null;
 
+    const CONTRIBUTORS_VISIBLE = 6;
+    let contributorsExpanded = false;
+
     async function loadContributors() {
         try {
-            const res = await fetch('/api/leaderboard');
+            const res = await fetch('/api/contributors');
             const data = await res.json();
             const container = document.getElementById('contributors-list');
-            if (!data || data.length === 0) {
-                container.innerHTML = '';
-                return;
-            }
-            container.innerHTML = data.map(u => `
-                <div class="contributor-card">
+            const btn = document.getElementById('see-more-btn');
+            if (!data || data.length === 0) { container.innerHTML = ''; return; }
+
+            container.innerHTML = data.map((u, i) => `
+                <div class="contributor-card${i >= CONTRIBUTORS_VISIBLE ? ' hidden' : ''}">
                     <div class="c-name">${u.username}</div>
                     <div class="c-count">${u.total_labels} labels</div>
                 </div>
             `).join('');
+
+            if (data.length > CONTRIBUTORS_VISIBLE) {
+                btn.style.display = 'inline-block';
+                btn.textContent = `See all ${data.length} contributors ▾`;
+            }
         } catch(e) { console.error(e); }
+    }
+
+    function toggleContributors() {
+        contributorsExpanded = !contributorsExpanded;
+        document.querySelectorAll('.contributor-card.hidden, .contributor-card').forEach((el, i) => {
+            if (i >= CONTRIBUTORS_VISIBLE) {
+                el.classList.toggle('hidden', !contributorsExpanded);
+            }
+        });
+        const btn = document.getElementById('see-more-btn');
+        const total = document.querySelectorAll('.contributor-card').length;
+        btn.textContent = contributorsExpanded ? 'Show less ▴' : `See all ${total} contributors ▾`;
     }
 
     // Populate contributors immediately on page load

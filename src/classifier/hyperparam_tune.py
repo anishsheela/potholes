@@ -35,16 +35,18 @@ OUTPUT_ROOT = 'tune_classifier/hyperparam'
 LR_VALUES = [1e-3, 3e-4, 1e-4, 3e-5]
 BATCH_SIZES = [16, 32, 64]
 FREEZE_EPOCH_VALUES = [0, 5]
+LABEL_SMOOTHING_VALUES = [0.0, 0.1]
 
 
-def run_trial(model_name, lr, batch_size, freeze_epochs,
+def run_trial(model_name, lr, batch_size, freeze_epochs, label_smoothing,
               use_class_weights, include_invalid, args, log_dir):
     weight_tag   = 'weighted'     if use_class_weights else 'unweighted'
     invalid_tag  = 'with_invalid' if include_invalid   else 'no_invalid'
     freeze_tag   = f'freeze{freeze_epochs}'
+    ls_tag       = f'ls{label_smoothing}'
     trial_id = (
         f'{model_name}__lr{lr}__bs{batch_size}'
-        f'__{weight_tag}__{invalid_tag}__{freeze_tag}'
+        f'__{weight_tag}__{invalid_tag}__{freeze_tag}__{ls_tag}'
     )
     log_path = os.path.join(log_dir, f'{trial_id}.txt')
 
@@ -58,7 +60,7 @@ def run_trial(model_name, lr, batch_size, freeze_epochs,
         '--val-split',  str(args.val_split),
         '--seed',       str(args.seed),
         '--patience',   str(args.patience),
-        '--label-smoothing', str(args.label_smoothing),
+        '--label-smoothing', str(label_smoothing),
         '--freeze-epochs',   str(freeze_epochs),
         '--scheduler',       args.scheduler,
     ]
@@ -100,7 +102,7 @@ def run_trial(model_name, lr, batch_size, freeze_epochs,
         if process.returncode != 0:
             return {
                 'model': model_name, 'lr': lr, 'batch_size': batch_size,
-                'freeze_epochs': freeze_epochs,
+                'freeze_epochs': freeze_epochs, 'label_smoothing': label_smoothing,
                 'class_weights': use_class_weights, 'include_invalid': include_invalid,
                 'status': 'Failed', 'time_seconds': elapsed, 'log': log_path,
             }
@@ -117,13 +119,14 @@ def run_trial(model_name, lr, batch_size, freeze_epochs,
             metrics['lr'] = lr
             metrics['batch_size'] = batch_size
             metrics['freeze_epochs'] = freeze_epochs
+            metrics['label_smoothing'] = label_smoothing
             metrics['class_weights'] = use_class_weights
             metrics['include_invalid'] = include_invalid
             return metrics
 
         return {
             'model': model_name, 'lr': lr, 'batch_size': batch_size,
-            'freeze_epochs': freeze_epochs,
+            'freeze_epochs': freeze_epochs, 'label_smoothing': label_smoothing,
             'class_weights': use_class_weights, 'include_invalid': include_invalid,
             'status': 'Success (no metrics)', 'time_seconds': elapsed, 'log': log_path,
         }
@@ -132,7 +135,7 @@ def run_trial(model_name, lr, batch_size, freeze_epochs,
         elapsed = time.time() - start
         return {
             'model': model_name, 'lr': lr, 'batch_size': batch_size,
-            'freeze_epochs': freeze_epochs,
+            'freeze_epochs': freeze_epochs, 'label_smoothing': label_smoothing,
             'class_weights': use_class_weights, 'include_invalid': include_invalid,
             'status': f'Error: {e}', 'time_seconds': elapsed, 'log': log_path,
         }
@@ -162,8 +165,8 @@ def main():
                         help='Batch sizes to sweep')
     parser.add_argument('--freeze-epoch-values', type=int, nargs='+', default=FREEZE_EPOCH_VALUES,
                         help='Freeze-epoch counts to sweep, e.g. --freeze-epoch-values 0 5 10')
-    parser.add_argument('--label-smoothing', type=float, default=0.1,
-                        help='Label smoothing for CrossEntropyLoss (0 = off)')
+    parser.add_argument('--label-smoothing-values', type=float, nargs='+', default=[0.1],
+                        help='Label smoothing values to sweep, e.g. --label-smoothing-values 0 0.05 0.1')
     parser.add_argument('--scheduler', type=str, default='cosine',
                         choices=['cosine', 'plateau', 'none'],
                         help='LR scheduler for the main training phase')
@@ -179,6 +182,7 @@ def main():
         args.lr_values,
         args.batch_sizes,
         args.freeze_epoch_values,
+        args.label_smoothing_values,
         weight_variants,
         invalid_variants,
     ))
@@ -194,11 +198,11 @@ def main():
         'lr_values': args.lr_values,
         'batch_sizes': args.batch_sizes,
         'freeze_epoch_values': args.freeze_epoch_values,
+        'label_smoothing_values': args.label_smoothing_values,
         'weight_variants': weight_variants,
         'invalid_variants': invalid_variants,
         'try_both_weights': args.try_both_weights,
         'try_both_invalid': args.try_both_invalid,
-        'label_smoothing': args.label_smoothing,
         'scheduler': args.scheduler,
         'epochs': args.epochs,
         'val_split': args.val_split,
@@ -213,31 +217,31 @@ def main():
         json.dump(config, f, indent=2)
 
     print(f'\nHyperparameter Tuning — {total_trials} trials')
-    print(f'  Models:        {models}')
-    print(f'  LR values:     {args.lr_values}')
-    print(f'  Batch sizes:   {args.batch_sizes}')
-    print(f'  Freeze epochs: {args.freeze_epoch_values}')
-    print(f'  Class weights: {weight_variants}')
-    print(f'  Invalid class: {invalid_variants}')
-    print(f'  Label smooth:  {args.label_smoothing}')
-    print(f'  Scheduler:     {args.scheduler}')
-    print(f'  Results dir:   {run_dir}')
+    print(f'  Models:          {models}')
+    print(f'  LR values:       {args.lr_values}')
+    print(f'  Batch sizes:     {args.batch_sizes}')
+    print(f'  Freeze epochs:   {args.freeze_epoch_values}')
+    print(f'  Label smoothing: {args.label_smoothing_values}')
+    print(f'  Class weights:   {weight_variants}')
+    print(f'  Invalid class:   {invalid_variants}')
+    print(f'  Scheduler:       {args.scheduler}')
+    print(f'  Results dir:     {run_dir}')
     print('=' * 60)
 
     sweep_start = time.time()
     all_results = []
 
-    for i, (model_name, lr, batch_size, freeze_epochs, use_weights, incl_invalid) in enumerate(combos):
+    for i, (model_name, lr, batch_size, freeze_epochs, label_smoothing, use_weights, incl_invalid) in enumerate(combos):
         weight_label  = 'weighted'     if use_weights   else 'unweighted'
         invalid_label = 'with_invalid' if incl_invalid  else 'no_invalid'
         print(
             f'\n[{i+1}/{total_trials}] model={model_name}  lr={lr}  bs={batch_size}'
-            f'  freeze={freeze_epochs}  weights={weight_label}  invalid={invalid_label}'
+            f'  freeze={freeze_epochs}  ls={label_smoothing}  weights={weight_label}  invalid={invalid_label}'
         )
         print('-' * 60)
 
         result = run_trial(
-            model_name, lr, batch_size, freeze_epochs,
+            model_name, lr, batch_size, freeze_epochs, label_smoothing,
             use_weights, incl_invalid, args, log_dir
         )
         all_results.append(result)
@@ -268,7 +272,8 @@ def main():
     # CSV — one row per trial
     csv_path = os.path.join(run_dir, 'summary.csv')
     csv_headers = [
-        'model', 'lr', 'batch_size', 'freeze_epochs', 'class_weights', 'include_invalid',
+        'model', 'lr', 'batch_size', 'freeze_epochs', 'label_smoothing',
+        'class_weights', 'include_invalid',
         'status', 'epochs_trained',
         'val_accuracy_%', 'precision_macro_%', 'recall_macro_%', 'f1_macro_%',
         'time_seconds', 'log_file',
@@ -278,48 +283,51 @@ def main():
         writer.writeheader()
         for d in all_results:
             writer.writerow({
-                'model':            d.get('model', ''),
-                'lr':               d.get('lr', ''),
-                'batch_size':       d.get('batch_size', ''),
-                'freeze_epochs':    d.get('freeze_epochs', ''),
-                'class_weights':    d.get('class_weights', ''),
-                'include_invalid':  d.get('include_invalid', ''),
-                'status':           d.get('status', ''),
-                'epochs_trained':   d.get('epochs', ''),
-                'val_accuracy_%':   f"{d['accuracy']:.4f}"  if 'accuracy'  in d else '',
-                'precision_macro_%':f"{d['precision']:.4f}" if 'precision' in d else '',
-                'recall_macro_%':   f"{d['recall']:.4f}"    if 'recall'    in d else '',
-                'f1_macro_%':       f"{d['f1_score']:.4f}"  if 'f1_score'  in d else '',
-                'time_seconds':     f"{d.get('time_seconds', 0):.1f}",
-                'log_file':         d.get('log', ''),
+                'model':             d.get('model', ''),
+                'lr':                d.get('lr', ''),
+                'batch_size':        d.get('batch_size', ''),
+                'freeze_epochs':     d.get('freeze_epochs', ''),
+                'label_smoothing':   d.get('label_smoothing', ''),
+                'class_weights':     d.get('class_weights', ''),
+                'include_invalid':   d.get('include_invalid', ''),
+                'status':            d.get('status', ''),
+                'epochs_trained':    d.get('epochs', ''),
+                'val_accuracy_%':    f"{d['accuracy']:.4f}"  if 'accuracy'  in d else '',
+                'precision_macro_%': f"{d['precision']:.4f}" if 'precision' in d else '',
+                'recall_macro_%':    f"{d['recall']:.4f}"    if 'recall'    in d else '',
+                'f1_macro_%':        f"{d['f1_score']:.4f}"  if 'f1_score'  in d else '',
+                'time_seconds':      f"{d.get('time_seconds', 0):.1f}",
+                'log_file':          d.get('log', ''),
             })
 
-    # Best-per-model table keyed by model + weight + invalid + freeze variant
+    # Best-per-variant table keyed by model + weight + invalid + freeze + label_smoothing
     best_per_variant = {}
     for d in all_results:
-        if 'accuracy' not in d:
+        if 'f1_score' not in d:
             continue
         m  = d.get('model', '')
-        w  = 'weighted'     if d.get('class_weights')   else 'unweighted'
-        iv = 'w/invalid'    if d.get('include_invalid') else 'no_invalid'
-        fz = f"freeze{d.get('freeze_epochs', '?')}"
-        key = f'{m}__{w}__{iv}__{fz}'
+        w  = 'weighted'  if d.get('class_weights')   else 'unweighted'
+        iv = 'w/inv'     if d.get('include_invalid') else 'no_inv'
+        fz = f"frz{d.get('freeze_epochs', '?')}"
+        ls = f"ls{d.get('label_smoothing', '?')}"
+        key = f'{m}__{w}__{iv}__{fz}__{ls}'
         if key not in best_per_variant or d['f1_score'] > best_per_variant[key]['f1_score']:
             best_per_variant[key] = d
 
-    print('\n' + '=' * 75)
+    print('\n' + '=' * 95)
     print(f'Tuning complete in {total_time//60:.0f}m {total_time%60:.0f}s')
-    print('=' * 75)
+    print('=' * 95)
     print(f'\nBest config per variant (by val F1):')
-    print(f'{"Model":<35} {"Wts":<12} {"Inv":<12} {"Frz":>5} {"LR":>8} {"Acc%":>7} {"F1%":>7}')
-    print('-' * 90)
+    print(f'{"Model":<35} {"Wts":<12} {"Inv":<10} {"Frz":>5} {"LS":>5} {"LR":>8} {"Acc%":>7} {"F1%":>7}')
+    print('-' * 95)
     for key, d in sorted(best_per_variant.items(),
                          key=lambda x: x[1].get('f1_score', 0), reverse=True):
         w  = 'weighted'  if d.get('class_weights')   else 'unweighted'
-        iv = 'w/invalid' if d.get('include_invalid') else 'no_invalid'
+        iv = 'w/inv'     if d.get('include_invalid') else 'no_inv'
         fz = d.get('freeze_epochs', '?')
+        ls = d.get('label_smoothing', '?')
         print(
-            f'{d["model"]:<35} {w:<12} {iv:<12} {fz:>5} {d["lr"]:>8} '
+            f'{d["model"]:<35} {w:<12} {iv:<10} {fz:>5} {ls:>5} {d["lr"]:>8} '
             f'{d["accuracy"]:>7.2f} {d.get("f1_score", 0):>7.2f}'
         )
 
