@@ -57,6 +57,9 @@ def run_model(model_name, args, log_dir):
         cmd.append('--use-class-weights')
     if args.include_invalid:
         cmd.append('--include-invalid')
+    cmd += ['--label-smoothing', str(args.label_smoothing)]
+    cmd += ['--freeze-epochs', str(args.freeze_epochs)]
+    cmd += ['--scheduler', args.scheduler]
 
     log_path = os.path.join(log_dir, f'{model_name}.txt')
 
@@ -125,6 +128,13 @@ def main():
     parser.add_argument('--val-split', type=float, default=0.3)
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--patience', type=int, default=3)
+    parser.add_argument('--label-smoothing', type=float, default=0.1,
+                        help='Label smoothing for CrossEntropyLoss (0 = off)')
+    parser.add_argument('--freeze-epochs', type=int, default=5,
+                        help='Epochs to train head only before unfreezing backbone (0 = off)')
+    parser.add_argument('--scheduler', type=str, default='cosine',
+                        choices=['cosine', 'plateau', 'none'],
+                        help='LR scheduler for main training phase')
     args = parser.parse_args()
 
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
