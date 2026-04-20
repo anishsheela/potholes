@@ -7,168 +7,214 @@ import json
 import re
 from datetime import datetime
 
+# All architectures supported by train_classifier.py
 MODELS_TO_TUNE = [
-    # Your proven baseline
+    # ResNet family
     'resnet18',
-    
-    # Modern CNNs (might beat ResNet18)
+    'resnet34',
+    'resnet50',
+
+    # EfficientNet family
+    'efficientnet_b0',
+    'efficientnet_b1',
+    'efficientnet_b2',
+    'efficientnetv2_s',
+    'efficientnetv2_m',
+
+    # Vision Transformers
+    'vit_small_patch16_224',
+    'vit_base_patch16_224',
+
+    # ConvNeXt family
     'convnext_tiny',
     'convnext_small',
-    'efficientnetv2_s',
-    
-    # Vision Transformers (will test separately with more epochs)
-    # 'vit_small_patch16_224',  # <- Train separately
-    # 'vit_base_patch16_224',   # <- Train separately
-    
-    # Hybrid approach
-    'swin_tiny_patch4_window7_224',  # Transformer + CNN locality
+    'convnext_base',
+
+    # Swin Transformers
+    'swin_tiny_patch4_window7_224',
+    'swin_small_patch4_window7_224',
 ]
 
+TRAIN_SCRIPT = 'src/classifier/train_classifier.py'
+OUTPUT_ROOT = 'tune_classifier/model_sweep'
+
+
+def run_model(model_name, args, log_dir):
+    cmd = [
+        'python', TRAIN_SCRIPT,
+        '--model', model_name,
+        '--data-dir', args.data_dir,
+        '--epochs', str(args.epochs),
+        '--batch-size', str(args.batch_size),
+        '--lr', str(args.lr),
+        '--val-split', str(args.val_split),
+        '--seed', str(args.seed),
+        '--patience', str(args.patience),
+    ]
+    if args.merge_classes:
+        cmd.append('--merge-classes')
+    if args.use_class_weights:
+        cmd.append('--use-class-weights')
+
+    log_path = os.path.join(log_dir, f'{model_name}.txt')
+
+    print(f'Running: {" ".join(cmd)}')
+
+    start = time.time()
+    try:
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+            universal_newlines=True,
+        )
+
+        lines = []
+        for line in process.stdout:
+            print(line, end='', flush=True)
+            lines.append(line)
+
+        process.wait()
+        elapsed = time.time() - start
+
+        full_output = ''.join(lines)
+
+        # Persist full log
+        with open(log_path, 'w') as f:
+            f.write(f'Command: {" ".join(cmd)}\n')
+            f.write(f'Exit code: {process.returncode}\n')
+            f.write('=' * 60 + '\n')
+            f.write(full_output)
+
+        if process.returncode != 0:
+            return {'status': 'Failed', 'time_seconds': elapsed, 'log': log_path}
+
+        # Parse JSON metrics emitted by train_classifier.py
+        match = re.search(
+            r'--- JSON_METRICS_START ---\n(.*?)\n--- JSON_METRICS_END ---',
+            full_output,
+            re.DOTALL,
+        )
+        if match:
+            metrics = json.loads(match.group(1))
+            metrics['status'] = 'Success'
+            metrics['log'] = log_path
+            return metrics
+
+        return {'status': 'Success (no metrics)', 'time_seconds': elapsed, 'log': log_path}
+
+    except Exception as e:
+        elapsed = time.time() - start
+        return {'status': f'Error: {e}', 'time_seconds': elapsed, 'log': log_path}
+
+
 def main():
-    parser = argparse.ArgumentParser(description='Tune Road Condition Classifiers')
-    parser.add_argument('--data-dir', type=str, default='dataset/classification/training', help='Path to dataset')
-    parser.add_argument('--epochs', type=int, default=15, help='Epochs per model')
-    parser.add_argument('--batch-size', type=int, default=32, help='Batch size')
-    parser.add_argument('--lr', type=float, default=1e-4, help='Learning rate')
-    parser.add_argument('--merge-classes', action='store_true', help='Merge into Binary classification')
-    parser.add_argument('--use-class-weights', action='store_true', help='Handle class imbalance')
-    parser.add_argument('--val-split', type=float, default=0.3, help='Validation split ratio')
-    parser.add_argument('--seed', type=int, default=42, help='Random seed for reproducibility')
-    parser.add_argument('--patience', type=int, default=3, help='Early stopping patience')
-    
+    parser = argparse.ArgumentParser(description='Sweep all model architectures for road condition classifier')
+    parser.add_argument('--data-dir', type=str, default='dataset/classification/training')
+    parser.add_argument('--epochs', type=int, default=15)
+    parser.add_argument('--batch-size', type=int, default=32)
+    parser.add_argument('--lr', type=float, default=1e-4)
+    parser.add_argument('--merge-classes', action='store_true')
+    parser.add_argument('--use-class-weights', action='store_true')
+    parser.add_argument('--val-split', type=float, default=0.3)
+    parser.add_argument('--seed', type=int, default=42)
+    parser.add_argument('--patience', type=int, default=3)
     args = parser.parse_args()
 
-    print(f"Starting Tuning Session with {len(MODELS_TO_TUNE)} Models:")
-    print("=" * 50)
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    run_dir = os.path.join(OUTPUT_ROOT, timestamp)
+    log_dir = os.path.join(run_dir, 'logs')
+    os.makedirs(log_dir, exist_ok=True)
+
+    # Save run config
+    config = vars(args)
+    config['models'] = MODELS_TO_TUNE
+    config['timestamp'] = timestamp
+    with open(os.path.join(run_dir, 'config.json'), 'w') as f:
+        json.dump(config, f, indent=2)
+
+    print(f'\nModel Sweep — {len(MODELS_TO_TUNE)} models')
+    print(f'Results will be saved to: {run_dir}')
+    print('=' * 60)
     for m in MODELS_TO_TUNE:
-        print(f"- {m}")
-    print("=" * 50)
-    
-    tuning_start_time = time.time()
+        print(f'  {m}')
+    print('=' * 60)
+
+    sweep_start = time.time()
     results = {}
 
     for i, model_name in enumerate(MODELS_TO_TUNE):
-        print(f"\n[{i+1}/{len(MODELS_TO_TUNE)}] Tuning Model: {model_name}")
-        print("-" * 50)
-        
-        # Build command for train_classifier.py
-        cmd = [
-            "python", "src/train_classifier.py",
-            "--model", model_name,
-            "--data-dir", args.data_dir,
-            "--epochs", str(args.epochs),
-            "--batch-size", str(args.batch_size),
-            "--lr", str(args.lr),
-            "--val-split", str(args.val_split),
-            "--seed", str(args.seed),
-            "--patience", str(args.patience)
-        ]
-        
-        if args.merge_classes:
-            cmd.append("--merge-classes")
-            
-        if args.use_class_weights:
-            cmd.append("--use-class-weights")
-            
-        print(f"Running command: {' '.join(cmd)}")
-        
-        # Run the training script
-        try:
-            start_train = time.time()
-            
-            # Use Popen to stream output line-by-line while collecting it
-            process = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT, # Merge stderr into stdout
-                text=True,
-                bufsize=1, # Line buffered
-                universal_newlines=True
-            )
-            
-            full_output = []
-            
-            # Print output live to terminal 
-            for line in process.stdout:
-                print(line, end='', flush=True)
-                full_output.append(line)
-                
-            process.wait()
-            
-            if process.returncode != 0:
-                raise subprocess.CalledProcessError(process.returncode, cmd)
-                
-            time_taken = time.time() - start_train
-            
-            # Reconstruct the full output for parsing
-            full_output_str = "".join(full_output)
-            
-            # Extract JSON metrics payload
-            metrics_match = re.search(r'--- JSON_METRICS_START ---\n(.*?)\n--- JSON_METRICS_END ---', full_output_str, re.DOTALL)
-            
-            if metrics_match:
-                metrics_data = json.loads(metrics_match.group(1))
-                metrics_data['status'] = f"Success"
-                results[model_name] = metrics_data
-            else:
-                results[model_name] = {
-                    "status": "Success (No Metrics found)",
-                    "time_seconds": time_taken
-                }
-                
-            print(f"\n✅ Finished {model_name} in {time_taken//60:.0f}m {time_taken%60:.0f}s")
-            
-        except subprocess.CalledProcessError as e:
-            print(f"\n❌ Error training {model_name}. Skipping to next.")
-            results[model_name] = {"status": "Failed"}
-            
-    # Tuning Summary
-    total_time = time.time() - tuning_start_time
-    print("\n" + "=" * 50)
-    print(f"Tuning Session Complete in {total_time//60:.0f}m {total_time%60:.0f}s!")
-    print("=" * 50)
-    for model, data in results.items():
-        if isinstance(data, dict) and data.get("status", "") == "Failed":
-             print(f"{model.ljust(25)}: Failed")
-        else:
-             time_m, time_s = divmod(data.get('time_seconds', 0), 60)
-             print(f"{model.ljust(25)}: {data.get('status', 'Success')} ({time_m:.0f}m {time_s:.0f}s)")
-             
-    print("\nTrained models are saved in the models/ directory.")
+        print(f'\n[{i+1}/{len(MODELS_TO_TUNE)}] {model_name}')
+        print('-' * 60)
 
-    # Save to CSV
-    os.makedirs('processed_data', exist_ok=True)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    csv_filename = f"processed_data/tuning_results_{timestamp}.csv"
-    
+        result = run_model(model_name, args, log_dir)
+        results[model_name] = result
+
+        status = result.get('status', '')
+        acc = result.get('accuracy', '')
+        f1 = result.get('f1_score', '')
+        t = result.get('time_seconds', 0)
+        print(f'\n  --> {model_name}: status={status} | acc={acc:.2f}% | f1={f1:.2f}% | time={t//60:.0f}m{t%60:.0f}s'
+              if isinstance(acc, float) else f'\n  --> {model_name}: {status}')
+
+        # Checkpoint after each model so partial results are never lost
+        with open(os.path.join(run_dir, 'results.json'), 'w') as f:
+            json.dump(results, f, indent=2)
+
+    total_time = time.time() - sweep_start
+
+    # Final JSON
+    summary = {
+        'config': config,
+        'total_time_seconds': total_time,
+        'results': results,
+    }
+    with open(os.path.join(run_dir, 'summary.json'), 'w') as f:
+        json.dump(summary, f, indent=2)
+
+    # CSV — one row per model, all metrics as columns
+    csv_path = os.path.join(run_dir, 'summary.csv')
     csv_headers = [
-        'Model', 'Status', 'Time (s)', 'Epochs', 'LR', 'Batch Size', 
-        'Validation Acc (%)', 'Precision (Macro %)', 'Recall (Macro %)', 'F1 Score (Macro %)'
+        'model', 'status', 'epochs_trained', 'lr', 'batch_size',
+        'val_accuracy_%', 'precision_macro_%', 'recall_macro_%', 'f1_macro_%',
+        'time_seconds', 'log_file',
     ]
-    
-    with open(csv_filename, mode='w', newline='') as file:
-        writer = csv.writer(file)
-        writer.writerow(csv_headers)
-        
-        for model, data in results.items():
-            if data.get('status') == 'Failed':
-                writer.writerow([model, 'Failed'] + [''] * 8)
-                continue
-                
-            writer.writerow([
-                model,
-                data.get('status', ''),
-                f"{data.get('time_seconds', 0):.1f}",
-                data.get('epochs', ''),
-                data.get('lr', ''),
-                data.get('batch_size', ''),
-                f"{data.get('accuracy', 0):.2f}" if 'accuracy' in data else '',
-                f"{data.get('precision', 0):.2f}" if 'precision' in data else '',
-                f"{data.get('recall', 0):.2f}" if 'recall' in data else '',
-                f"{data.get('f1_score', 0):.2f}" if 'f1_score' in data else ''
-            ])
-            
-    print(f"\n✅ Tuning results saved to {csv_filename}")
+    with open(csv_path, 'w', newline='') as f:
+        writer = csv.DictWriter(f, fieldnames=csv_headers, extrasaction='ignore')
+        writer.writeheader()
+        for model_name, d in results.items():
+            writer.writerow({
+                'model': model_name,
+                'status': d.get('status', ''),
+                'epochs_trained': d.get('epochs', ''),
+                'lr': d.get('lr', args.lr),
+                'batch_size': d.get('batch_size', args.batch_size),
+                'val_accuracy_%': f"{d['accuracy']:.4f}" if 'accuracy' in d else '',
+                'precision_macro_%': f"{d['precision']:.4f}" if 'precision' in d else '',
+                'recall_macro_%': f"{d['recall']:.4f}" if 'recall' in d else '',
+                'f1_macro_%': f"{d['f1_score']:.4f}" if 'f1_score' in d else '',
+                'time_seconds': f"{d.get('time_seconds', 0):.1f}",
+                'log_file': d.get('log', ''),
+            })
+
+    # Console summary table
+    print('\n' + '=' * 60)
+    print(f'Sweep complete in {total_time//60:.0f}m {total_time%60:.0f}s')
+    print('=' * 60)
+    print(f'{"Model":<35} {"Acc%":>7} {"F1%":>7} {"Status"}')
+    print('-' * 60)
+    for model_name, d in sorted(results.items(), key=lambda x: x[1].get('accuracy', 0), reverse=True):
+        acc = f"{d['accuracy']:.2f}" if 'accuracy' in d else 'N/A'
+        f1 = f"{d['f1_score']:.2f}" if 'f1_score' in d else 'N/A'
+        print(f'{model_name:<35} {acc:>7} {f1:>7}   {d.get("status", "")}')
+
+    print(f'\nFull results: {run_dir}')
+    print(f'  summary.json  — all metrics + logs paths')
+    print(f'  summary.csv   — spreadsheet-ready')
+    print(f'  logs/         — full training output per model')
+
 
 if __name__ == '__main__':
     main()
