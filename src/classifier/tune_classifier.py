@@ -55,6 +55,8 @@ def run_model(model_name, args, log_dir):
         cmd.append('--merge-classes')
     if args.use_class_weights:
         cmd.append('--use-class-weights')
+    if args.include_invalid:
+        cmd.append('--include-invalid')
 
     log_path = os.path.join(log_dir, f'{model_name}.txt')
 
@@ -118,6 +120,8 @@ def main():
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--merge-classes', action='store_true')
     parser.add_argument('--use-class-weights', action='store_true')
+    parser.add_argument('--include-invalid', action='store_true',
+                        help='Include Invalid class in training')
     parser.add_argument('--val-split', type=float, default=0.3)
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--patience', type=int, default=3)
