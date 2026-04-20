@@ -429,6 +429,15 @@ HTML_TEMPLATE = """
         
         .progress-bar { background: #ddd; height: 15px; border-radius: 8px; overflow: hidden; margin-bottom: 10px; }
         .progress-fill { background: #3498db; height: 100%; width: 0%; transition: width 0.3s; text-align: center; color: white; font-size: 0.7rem; font-weight: bold; line-height: 15px; }
+
+        /* Thank-you banner */
+        .thanks-banner { background: linear-gradient(135deg, #f6d365 0%, #fda085 100%); border-radius: 12px; padding: 30px 35px; margin-bottom: 30px; text-align: center; }
+        .thanks-banner h2 { font-size: 1.6rem; color: #fff; margin-bottom: 10px; text-shadow: 0 1px 3px rgba(0,0,0,0.15); }
+        .thanks-banner p { color: rgba(255,255,255,0.95); font-size: 1rem; max-width: 620px; margin: 0 auto 25px auto; line-height: 1.6; }
+        .contributors { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 5px; }
+        .contributor-card { background: rgba(255,255,255,0.35); backdrop-filter: blur(4px); border-radius: 10px; padding: 12px 20px; min-width: 110px; text-align: center; }
+        .contributor-card .c-name { font-weight: 700; font-size: 1rem; color: #fff; text-transform: capitalize; }
+        .contributor-card .c-count { font-size: 0.85rem; color: rgba(255,255,255,0.9); margin-top: 3px; }
     </style>
 </head>
 <body>
@@ -440,6 +449,15 @@ HTML_TEMPLATE = """
 
 <div class="container">
     <div id="login-screen" class="panel">
+
+        <div class="thanks-banner">
+            <h2>🙏 Thank You to Our Collaborators</h2>
+            <p>This project wouldn't have been possible without your time and careful judgement. Every label you submitted has directly contributed to training an AI model that assesses real road conditions. Your work is now part of the research.</p>
+            <div class="contributors" id="contributors-list">
+                <div class="contributor-card" style="color:rgba(255,255,255,0.7); font-size:0.9rem;">Loading...</div>
+            </div>
+        </div>
+
         <div class="header">
             <h1>🚦 Road Validation: Consensus & Glory</h1>
             <p>You only earn points if someone else agrees with you. Be accurate.</p>
@@ -523,6 +541,27 @@ HTML_TEMPLATE = """
     let username = '';
     let currentImage = null;
     let startTime = null;
+
+    async function loadContributors() {
+        try {
+            const res = await fetch('/api/leaderboard');
+            const data = await res.json();
+            const container = document.getElementById('contributors-list');
+            if (!data || data.length === 0) {
+                container.innerHTML = '';
+                return;
+            }
+            container.innerHTML = data.map(u => `
+                <div class="contributor-card">
+                    <div class="c-name">${u.username}</div>
+                    <div class="c-count">${u.total_labels} labels</div>
+                </div>
+            `).join('');
+        } catch(e) { console.error(e); }
+    }
+
+    // Populate contributors immediately on page load
+    loadContributors();
 
     function start() {
         const val = document.getElementById('username-input').value.trim();
