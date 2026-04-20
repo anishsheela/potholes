@@ -129,9 +129,11 @@ def main():
     parser.add_argument('--use-class-weights', action='store_true',
                         help='Use weighted loss. Ignored if --try-both-weights is set.')
     parser.add_argument('--include-invalid', action='store_true',
-                        help='Include Invalid class in training')
+                        help='Include Invalid class in training. Ignored if --try-both-invalid is set.')
     parser.add_argument('--try-both-weights', action='store_true',
                         help='Run each trial twice: once with class weights, once without')
+    parser.add_argument('--try-both-invalid', action='store_true',
+                        help='Run each trial twice: once with Invalid class, once without')
     parser.add_argument('--val-split', type=float, default=0.3)
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--patience', type=int, default=3)
@@ -149,7 +151,13 @@ def main():
     else:
         weight_variants = [args.use_class_weights]
 
-    combos = list(itertools.product(models, args.lr_values, args.batch_sizes, weight_variants))
+    # Build invalid variants
+    if args.try_both_invalid:
+        invalid_variants = [True, False]
+    else:
+        invalid_variants = [args.include_invalid]
+
+    combos = list(itertools.product(models, args.lr_values, args.batch_sizes, weight_variants, invalid_variants))
     total_trials = len(combos)
 
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -162,8 +170,9 @@ def main():
         'lr_values': args.lr_values,
         'batch_sizes': args.batch_sizes,
         'weight_variants': weight_variants,
+        'invalid_variants': invalid_variants,
         'try_both_weights': args.try_both_weights,
-        'include_invalid': args.include_invalid,
+        'try_both_invalid': args.try_both_invalid,
         'epochs': args.epochs,
         'val_split': args.val_split,
         'seed': args.seed,
@@ -181,19 +190,20 @@ def main():
     print(f'  LR values:     {args.lr_values}')
     print(f'  Batch sizes:   {args.batch_sizes}')
     print(f'  Class weights: {weight_variants}')
-    print(f'  Invalid class: {args.include_invalid}')
+    print(f'  Invalid class: {invalid_variants}')
     print(f'  Results dir:   {run_dir}')
     print('=' * 60)
 
     sweep_start = time.time()
     all_results = []
 
-    for i, (model_name, lr, batch_size, use_weights) in enumerate(combos):
+    for i, (model_name, lr, batch_size, use_weights, incl_invalid) in enumerate(combos):
         weight_label = 'weighted' if use_weights else 'unweighted'
-        print(f'\n[{i+1}/{total_trials}] model={model_name}  lr={lr}  bs={batch_size}  weights={weight_label}')
+        invalid_label = 'with_invalid' if incl_invalid else 'no_invalid'
+        print(f'\n[{i+1}/{total_trials}] model={model_name}  lr={lr}  bs={batch_size}  weights={weight_label}  invalid={invalid_label}')
         print('-' * 60)
 
-        result = run_trial(model_name, lr, batch_size, use_weights, args.include_invalid, args, log_dir)
+        result = run_trial(model_name, lr, batch_size, use_weights, incl_invalid, args, log_dir)
         all_results.append(result)
 
         acc = result.get('accuracy', '')
@@ -247,12 +257,13 @@ def main():
                 'log_file': d.get('log', ''),
             })
 
-    # Best-per-model table (keyed by model + weight variant)
+    # Best-per-model table (keyed by model + weight variant + invalid variant)
     best_per_model = {}
     for d in all_results:
         m = d.get('model', '')
         w = 'weighted' if d.get('class_weights') else 'unweighted'
-        key = f'{m}__{w}'
+        iv = 'w/invalid' if d.get('include_invalid') else 'no_invalid'
+        key = f'{m}__{w}__{iv}'
         if 'accuracy' not in d:
             continue
         if key not in best_per_model or d['accuracy'] > best_per_model[key]['accuracy']:
@@ -261,13 +272,14 @@ def main():
     print('\n' + '=' * 60)
     print(f'Tuning complete in {total_time//60:.0f}m {total_time%60:.0f}s')
     print('=' * 60)
-    print(f'\nBest config per model (by val accuracy):')
-    print(f'{"Model":<35} {"Weights":<12} {"LR":>8} {"BS":>4} {"Acc%":>7} {"F1%":>7}')
-    print('-' * 75)
+    print(f'\nBest config per model/variant (by val accuracy):')
+    print(f'{"Model":<35} {"Weights":<12} {"Invalid":<12} {"LR":>8} {"Acc%":>7} {"F1%":>7}')
+    print('-' * 85)
     for key, d in sorted(best_per_model.items(), key=lambda x: x[1].get('accuracy', 0), reverse=True):
-        w = 'weighted' if d.get('class_weights') else 'unweighted'
+        w  = 'weighted' if d.get('class_weights') else 'unweighted'
+        iv = 'w/invalid' if d.get('include_invalid') else 'no_invalid'
         print(
-            f'{d["model"]:<35} {w:<12} {d["lr"]:>8} {d["batch_size"]:>4} '
+            f'{d["model"]:<35} {w:<12} {iv:<12} {d["lr"]:>8} '
             f'{d["accuracy"]:>7.2f} {d.get("f1_score", 0):>7.2f}'
         )
 

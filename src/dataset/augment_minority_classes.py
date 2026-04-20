@@ -28,11 +28,14 @@ import torchvision.transforms.functional as TF
 from tqdm import tqdm
 
 # ── Default augmentation targets ──────────────────────────────────────────────
+# Only road quality minority classes by default.
+# Pass --augment-invalid to also augment the Invalid class.
 DEFAULT_TARGETS = {
-    'Poor':    400,
-    'Fair':    500,
-    'Invalid': 400,
+    'Poor': 400,
+    'Fair': 500,
 }
+
+DEFAULT_INVALID_TARGET = 400
 
 SUPPORTED_EXTS = {'.jpg', '.jpeg', '.png'}
 
@@ -211,7 +214,12 @@ def parse_args():
         '--targets', type=str, nargs='+',
         metavar='Class:N',
         help='Target image counts per class, e.g. --targets Poor:500 Fair:600. '
-             'Defaults: Poor:400 Fair:500 Invalid:400'
+             'Defaults: Poor:400 Fair:500'
+    )
+    parser.add_argument(
+        '--augment-invalid', action='store_true',
+        help=f'Also augment the Invalid class (target: {DEFAULT_INVALID_TARGET}). '
+             f'Override count with --targets Invalid:N'
     )
     parser.add_argument(
         '--dry-run', action='store_true',
@@ -232,6 +240,11 @@ def main():
 
     # Parse targets
     targets = dict(DEFAULT_TARGETS)
+
+    # Add Invalid if requested (before --targets override so user can still change the count)
+    if args.augment_invalid:
+        targets['Invalid'] = DEFAULT_INVALID_TARGET
+
     if args.targets:
         for item in args.targets:
             if ':' not in item:
