@@ -33,7 +33,8 @@ def filter_frames(csv_path, frames_dir, output_csv, output_dir,
                   max_speed_kmh=DEFAULT_MAX_SPEED_KMH,
                   args_out_invalid=None,
                   disable_idle=False,
-                  disable_anomaly=False):
+                  disable_anomaly=False,
+                  missing_log=None):
 
     if not os.path.exists(csv_path):
         print(f"Error: CSV file not found at {csv_path}")
@@ -135,6 +136,7 @@ def filter_frames(csv_path, frames_dir, output_csv, output_dir,
         os.makedirs(output_dir, exist_ok=True)
         copied = 0
         missing = 0
+        missing_rows = []
 
         for _, row in final_df.iterrows():
             filename = format_filename(row['Video_Seconds'])
@@ -147,11 +149,21 @@ def filter_frames(csv_path, frames_dir, output_csv, output_dir,
                 copied += 1
             else:
                 missing += 1
+                missing_rows.append({
+                    'expected_path': src,
+                    'video':         row['Video'],
+                    'seconds':       row['Video_Seconds'],
+                })
 
             if copied % 500 == 0 and copied > 0:
                 print(f"  Copied {copied}/{len(final_df)} frames...")
 
         print(f"Done. {copied:,} copied, {missing:,} missing.")
+
+        if missing_log and missing_rows:
+            os.makedirs(os.path.dirname(missing_log) or '.', exist_ok=True)
+            pd.DataFrame(missing_rows).to_csv(missing_log, index=False)
+            print(f"Missing file paths written to {missing_log}")
 
     elapsed = time.time() - start_time
     print(f"Total time: {elapsed:.1f}s")
@@ -164,6 +176,8 @@ if __name__ == "__main__":
     parser.add_argument("--max-speed",      type=float, default=DEFAULT_MAX_SPEED_KMH)
     parser.add_argument("--disable-idle",   action="store_true")
     parser.add_argument("--disable-anomaly", action="store_true")
+    parser.add_argument("--missing-log",    type=str, default=None,
+                        help="CSV path to write missing frame paths for debugging")
     args = parser.parse_args()
 
     csv_path    = os.path.join("processed_data", "route_data", f"{args.camera}.csv")
@@ -179,4 +193,5 @@ if __name__ == "__main__":
         args_out_invalid=out_invalid,
         disable_idle=args.disable_idle,
         disable_anomaly=args.disable_anomaly,
+        missing_log=args.missing_log,
     )
