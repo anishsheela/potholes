@@ -182,14 +182,18 @@ def main():
     if len(df) < before:
         print(f'  Dropped {before - len(df):,} rows with unrecognised class labels.')
 
-    # Drop GPS outliers using IQR to remove OCR misreads near (0, 0)
+    # Drop GPS outliers: keep only points within 2° of the median
+    # (~220 km radius) — removes OCR misreads near (0,0) or other continents.
     before = len(df)
-    for col in ('latitude', 'longitude'):
-        q1, q3 = df[col].quantile(0.01), df[col].quantile(0.99)
-        iqr = q3 - q1
-        df = df[df[col].between(q1 - 3 * iqr, q3 + 3 * iqr)]
+    lat_med = df['latitude'].median()
+    lon_med = df['longitude'].median()
+    df = df[
+        df['latitude'].between(lat_med - 2, lat_med + 2) &
+        df['longitude'].between(lon_med - 2, lon_med + 2)
+    ]
     if len(df) < before:
-        print(f'  Dropped {before - len(df):,} GPS outlier rows (IQR filter).')
+        print(f'  Dropped {before - len(df):,} GPS outlier rows '
+              f'(>2° from median {lat_med:.4f},{lon_med:.4f}).')
 
     if df.empty:
         print('No valid predictions to process. Exiting.')
