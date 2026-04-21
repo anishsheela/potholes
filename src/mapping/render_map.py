@@ -37,12 +37,12 @@ from folium.plugins import MousePosition
 # ── Colour scheme ─────────────────────────────────────────────────────────────
 QUALITY_COLOUR = {
     # 3-class merged model
-    'Good':      '#27ae60',   # green
-    'Bad':       '#e74c3c',   # red
+    'Bad':       '#d73027',   # red
+    'Good':      '#a8c92e',   # yellow-green
     # 5-class full model
-    'Excellent': '#2ecc71',   # bright green
-    'Fair':      '#e67e22',   # orange
-    'Poor':      '#c0392b',   # dark red
+    'Poor':      '#d73027',   # red
+    'Fair':      '#f4a11d',   # amber
+    'Excellent': '#1a9850',   # dark green
 }
 FALLBACK_COLOUR = '#95a5a6'   # grey — should not appear if data is clean
 
