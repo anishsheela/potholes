@@ -215,7 +215,7 @@ def main():
         print(f'\nDownloading OSM {args.network_type} network ...')
         print(f'  Bbox: N={north:.5f}  S={south:.5f}  E={east:.5f}  W={west:.5f}')
         G = ox.graph_from_bbox(
-            bbox=(north, south, east, west),
+            bbox=(west, south, east, north),  # osmnx 2.x: (left, bottom, right, top)
             network_type=args.network_type,
             simplify=True,
         )
