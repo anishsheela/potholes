@@ -36,10 +36,13 @@ from folium.plugins import MiniMap, MousePosition
 
 # ── Colour scheme ─────────────────────────────────────────────────────────────
 QUALITY_COLOUR = {
-    'Excellent': '#27ae60',   # green
-    'Good':      '#f1c40f',   # yellow
+    # 3-class merged model
+    'Good':      '#27ae60',   # green
+    'Bad':       '#e74c3c',   # red
+    # 5-class full model
+    'Excellent': '#2ecc71',   # bright green
     'Fair':      '#e67e22',   # orange
-    'Poor':      '#e74c3c',   # red
+    'Poor':      '#c0392b',   # dark red
 }
 FALLBACK_COLOUR = '#95a5a6'   # grey — should not appear if data is clean
 
@@ -197,6 +200,10 @@ def make_obs_count_layer(gdf: gpd.GeoDataFrame, show: bool = False) -> folium.Ge
 
 # ── Legend HTML ───────────────────────────────────────────────────────────────
 
+def _legend_entry(label):
+    colour = QUALITY_COLOUR.get(label, FALLBACK_COLOUR)
+    return f'<span style="color:{colour};font-size:18px;">&#9644;</span> {label}<br>'
+
 LEGEND_HTML = """
 <div style="
     position: fixed;
@@ -211,18 +218,20 @@ LEGEND_HTML = """
     line-height: 1.6;
 ">
   <b>Road Quality</b><br>
-  <span style="color:{poor};font-size:18px;">&#9644;</span> Poor<br>
-  <span style="color:{fair};font-size:18px;">&#9644;</span> Fair<br>
-  <span style="color:{good};font-size:18px;">&#9644;</span> Good<br>
-  <span style="color:{excellent};font-size:18px;">&#9644;</span> Excellent<br>
+  {bad}
+  {good}
+  {excellent}
+  {fair}
+  {poor}
   <hr style="margin:6px 0">
   <span style="color:#2980b9;font-size:18px;">&#9644;</span> Observation density
 </div>
 """.format(
-    poor=QUALITY_COLOUR['Poor'],
-    fair=QUALITY_COLOUR['Fair'],
-    good=QUALITY_COLOUR['Good'],
-    excellent=QUALITY_COLOUR['Excellent'],
+    bad=_legend_entry('Bad'),
+    good=_legend_entry('Good'),
+    excellent=_legend_entry('Excellent'),
+    fair=_legend_entry('Fair'),
+    poor=_legend_entry('Poor'),
 )
 
 

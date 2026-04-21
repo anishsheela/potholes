@@ -37,10 +37,13 @@ from PIL import Image
 import timm
 from tqdm import tqdm
 
-# Class order matches PyTorch ImageFolder alphabetical sort when trained
-# with --include-invalid (5 classes) or without (4 classes).
-CLASSES_5 = ['Excellent', 'Fair', 'Good', 'Invalid', 'Poor']
+# Class order matches PyTorch ImageFolder alphabetical sort.
+# 3-class: trained with --merge-classes --include-invalid  → Bad / Good / Invalid
+# 4-class: trained without Invalid                         → Excellent / Fair / Good / Poor
+# 5-class: trained with --include-invalid                  → Excellent / Fair / Good / Invalid / Poor
+CLASSES_3 = ['Bad', 'Good', 'Invalid']
 CLASSES_4 = ['Excellent', 'Fair', 'Good', 'Poor']
+CLASSES_5 = ['Excellent', 'Fair', 'Good', 'Invalid', 'Poor']
 
 
 # ── GPS helpers ───────────────────────────────────────────────────────────────
@@ -155,15 +158,15 @@ def parse_args():
                         help='Exclude frames predicted as Invalid from the output')
     parser.add_argument('--no-gps-drop', action='store_true',
                         help='Keep rows even when no GPS match is found (lat/lon will be empty)')
-    parser.add_argument('--num-classes', type=int, default=5, choices=[4, 5],
-                        help='Number of output classes the model was trained with (4 without Invalid, 5 with)')
+    parser.add_argument('--num-classes', type=int, default=3, choices=[3, 4, 5],
+                        help='Number of output classes: 3=merged(Bad/Good/Invalid), 4=no-invalid, 5=full')
     return parser.parse_args()
 
 
 def main():
     args = parse_args()
 
-    classes = CLASSES_5 if args.num_classes == 5 else CLASSES_4
+    classes = {3: CLASSES_3, 4: CLASSES_4, 5: CLASSES_5}[args.num_classes]
 
     # ── Validate inputs ───────────────────────────────────────────────────────
     if not os.path.exists(args.weights):

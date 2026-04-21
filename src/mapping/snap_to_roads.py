@@ -51,9 +51,12 @@ import osmnx as ox
 # ── Quality ordering ──────────────────────────────────────────────────────────
 # Higher score = better road.  Used for pessimistic (min) and scoring.
 QUALITY_SCORE = {
+    # 3-class merged model
+    'Bad':       1,
+    'Good':      3,
+    # 5-class full model
     'Poor':      1,
     'Fair':      2,
-    'Good':      3,
     'Excellent': 4,
 }
 SCORE_TO_LABEL = {v: k for k, v in QUALITY_SCORE.items()}
@@ -259,15 +262,16 @@ def main():
         cls_counts = Counter(obs_labels)
 
         rows.append({
-            'u':                  u,
-            'v':                  v,
-            'key':                k,
+            'u':                   u,
+            'v':                   v,
+            'key':                 k,
             'quality_pessimistic': pess,
             'quality_majority':    maj,
             'quality_score':       round(score, 3),
             'obs_count':           len(obs_labels),
             'count_excellent':     cls_counts.get('Excellent', 0),
             'count_good':          cls_counts.get('Good',      0),
+            'count_bad':           cls_counts.get('Bad',       0),
             'count_fair':          cls_counts.get('Fair',      0),
             'count_poor':          cls_counts.get('Poor',      0),
         })
