@@ -26,7 +26,18 @@ def safe_float(val):
 
 
 def format_filename(video_sec):
-    return f"frame_{video_sec:08.1f}s.jpg"
+    """Return the frame filename, trying both padding conventions."""
+    return f"frame_{video_sec:08.1f}s.jpg"   # 6-digit: frame_000000.0s.jpg
+
+
+def find_frame(frames_dir, video, video_sec):
+    """Locate the frame file, handling both 4-digit and 6-digit padding."""
+    for fmt in (f"frame_{video_sec:08.1f}s.jpg",   # frame_000000.0s.jpg
+                f"frame_{video_sec:06.1f}s.jpg"):    # frame_0000.0s.jpg
+        path = os.path.join(frames_dir, video, fmt)
+        if os.path.exists(path):
+            return path
+    return None
 
 
 def filter_frames(csv_path, frames_dir, output_csv, output_dir,
@@ -139,10 +150,10 @@ def filter_frames(csv_path, frames_dir, output_csv, output_dir,
         missing_rows = []
 
         for _, row in final_df.iterrows():
-            filename = format_filename(row['Video_Seconds'])
-            src = os.path.join(frames_dir, row['Video'], filename)
+            src = find_frame(frames_dir, row['Video'], row['Video_Seconds'])
 
-            if os.path.exists(src):
+            if src:
+                filename = os.path.basename(src)
                 dest_folder = os.path.join(output_dir, row['Video'])
                 os.makedirs(dest_folder, exist_ok=True)
                 shutil.copy2(src, os.path.join(dest_folder, filename))
@@ -150,7 +161,8 @@ def filter_frames(csv_path, frames_dir, output_csv, output_dir,
             else:
                 missing += 1
                 missing_rows.append({
-                    'expected_path': src,
+                    'expected_path': os.path.join(frames_dir, row['Video'],
+                                                  format_filename(row['Video_Seconds'])),
                     'video':         row['Video'],
                     'seconds':       row['Video_Seconds'],
                 })
