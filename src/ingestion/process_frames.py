@@ -26,7 +26,7 @@ def safe_float(val):
 
 
 def format_filename(video_sec):
-    return f"frame_{video_sec:06.1f}s.jpg"
+    return f"frame_{video_sec:08.1f}s.jpg"
 
 
 def filter_frames(csv_path, frames_dir, output_csv, output_dir,
