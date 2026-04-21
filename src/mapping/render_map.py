@@ -32,7 +32,7 @@ import json
 import pandas as pd
 import geopandas as gpd
 import folium
-from folium.plugins import MiniMap, MousePosition
+from folium.plugins import MousePosition
 
 # ── Colour scheme ─────────────────────────────────────────────────────────────
 QUALITY_COLOUR = {
@@ -182,14 +182,24 @@ def make_obs_count_layer(gdf: gpd.GeoDataFrame, show: bool = False) -> folium.Ge
 
 # ── Legend HTML ───────────────────────────────────────────────────────────────
 
-def _legend_entry(label):
-    colour = QUALITY_COLOUR.get(label, FALLBACK_COLOUR)
-    return f'<span style="color:{colour};font-size:18px;">&#9644;</span> {label}<br>'
+# Label display order: worst → best
+LABEL_ORDER = ['Bad', 'Poor', 'Fair', 'Good', 'Excellent']
 
-LEGEND_HTML = """
+
+def build_legend_html(labels: list) -> str:
+    """Build legend HTML for only the labels present in this dataset."""
+    entries = ''
+    for lbl in LABEL_ORDER:
+        if lbl in labels:
+            colour = QUALITY_COLOUR.get(lbl, FALLBACK_COLOUR)
+            entries += (
+                f'<span style="color:{colour};font-size:18px;">&#9644;</span>'
+                f' {lbl}<br>'
+            )
+    return f"""
 <div style="
     position: fixed;
-    bottom: 40px; right: 10px;
+    bottom: 40px; left: 10px;
     z-index: 1000;
     background: white;
     padding: 12px 16px;
@@ -200,21 +210,11 @@ LEGEND_HTML = """
     line-height: 1.6;
 ">
   <b>Road Quality</b><br>
-  {bad}
-  {good}
-  {excellent}
-  {fair}
-  {poor}
+  {entries}
   <hr style="margin:6px 0">
   <span style="color:#2980b9;font-size:18px;">&#9644;</span> Observation density
 </div>
-""".format(
-    bad=_legend_entry('Bad'),
-    good=_legend_entry('Good'),
-    excellent=_legend_entry('Excellent'),
-    fair=_legend_entry('Fair'),
-    poor=_legend_entry('Poor'),
-)
+"""
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -295,15 +295,15 @@ def main():
 
     # ── UI extras ─────────────────────────────────────────────────────────────
     folium.LayerControl(collapsed=False).add_to(m)
-    MiniMap(toggle_display=True).add_to(m)
     MousePosition(
-        position='bottomleft',
+        position='bottomright',
         separator=' | ',
         prefix='Lat/Lon:',
     ).add_to(m)
 
-    # Legend
-    m.get_root().html.add_child(folium.Element(LEGEND_HTML))
+    # Dynamic legend — only labels present in this dataset
+    present_labels = gdf['quality_pessimistic'].unique().tolist()
+    m.get_root().html.add_child(folium.Element(build_legend_html(present_labels)))
 
     # ── Summary stats in map title ────────────────────────────────────────────
     total = len(gdf)
@@ -311,7 +311,8 @@ def main():
     stats_lines = ' &nbsp;|&nbsp; '.join(
         f'<span style="color:{quality_colour(lbl)};font-weight:bold;">'
         f'{lbl}</span> {pess_counts.get(lbl, 0):,}'
-        for lbl in ['Poor', 'Fair', 'Good', 'Excellent']
+        for lbl in LABEL_ORDER
+        if lbl in present_labels
     )
     title_html = f"""
     <div style="
@@ -335,10 +336,11 @@ def main():
     print(f'{"="*55}')
     print(f'  Total road segments : {total:,}')
     print(f'\nQuality breakdown (pessimistic):')
-    for lbl in ['Poor', 'Fair', 'Good', 'Excellent']:
-        n = pess_counts.get(lbl, 0)
-        pct = 100 * n / max(total, 1)
-        print(f'  {lbl:<12} {n:>5,}  ({pct:.1f}%)')
+    for lbl in LABEL_ORDER:
+        if lbl in present_labels:
+            n = pess_counts.get(lbl, 0)
+            pct = 100 * n / max(total, 1)
+            print(f'  {lbl:<12} {n:>5,}  ({pct:.1f}%)')
     print(f'\nOpen in a browser: {os.path.abspath(args.output)}')
 
 
