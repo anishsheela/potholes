@@ -111,27 +111,6 @@ def build_geojson(gdf: gpd.GeoDataFrame, label_col: str) -> dict:
 
 # ── Folium layer builders ─────────────────────────────────────────────────────
 
-_STYLE_JS = """
-function(feature) {
-    return {
-        color:   feature.properties.colour,
-        weight:  feature.properties.weight,
-        opacity: 0.85,
-    };
-}
-"""
-
-_HIGHLIGHT_JS = """
-function(feature) {
-    return {
-        color:   feature.properties.colour,
-        weight:  feature.properties.weight + 2,
-        opacity: 1.0,
-    };
-}
-"""
-
-
 def make_quality_layer(geojson: dict, layer_name: str, show: bool) -> folium.GeoJson:
     tooltip = folium.GeoJsonTooltip(
         fields=['name', 'quality', 'obs_count', 'score',
@@ -150,8 +129,16 @@ def make_quality_layer(geojson: dict, layer_name: str, show: bool) -> folium.Geo
         geojson,
         name=layer_name,
         show=show,
-        style_function=folium.JsCode(_STYLE_JS),
-        highlight_function=folium.JsCode(_HIGHLIGHT_JS),
+        style_function=lambda f: {
+            'color':   f['properties']['colour'],
+            'weight':  f['properties']['weight'],
+            'opacity': 0.85,
+        },
+        highlight_function=lambda f: {
+            'color':   f['properties']['colour'],
+            'weight':  f['properties']['weight'] + 2,
+            'opacity': 1.0,
+        },
         tooltip=tooltip,
     )
 
@@ -174,15 +161,6 @@ def make_obs_count_layer(gdf: gpd.GeoDataFrame, show: bool = False) -> folium.Ge
             },
         })
 
-    obs_style_js = """
-    function(feature) {
-        return {
-            color:   '#2980b9',
-            weight:  feature.properties.weight,
-            opacity: 0.70,
-        };
-    }
-    """
     tooltip = folium.GeoJsonTooltip(
         fields=['name', 'obs_count'],
         aliases=['Street', 'Observations'],
@@ -193,7 +171,11 @@ def make_obs_count_layer(gdf: gpd.GeoDataFrame, show: bool = False) -> folium.Ge
         {'type': 'FeatureCollection', 'features': features},
         name='Observation density',
         show=show,
-        style_function=folium.JsCode(obs_style_js),
+        style_function=lambda f: {
+            'color':   '#2980b9',
+            'weight':  f['properties']['weight'],
+            'opacity': 0.70,
+        },
         tooltip=tooltip,
     )
 
