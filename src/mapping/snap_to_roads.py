@@ -182,6 +182,15 @@ def main():
     if len(df) < before:
         print(f'  Dropped {before - len(df):,} rows with unrecognised class labels.')
 
+    # Drop GPS outliers using IQR to remove OCR misreads near (0, 0)
+    before = len(df)
+    for col in ('latitude', 'longitude'):
+        q1, q3 = df[col].quantile(0.01), df[col].quantile(0.99)
+        iqr = q3 - q1
+        df = df[df[col].between(q1 - 3 * iqr, q3 + 3 * iqr)]
+    if len(df) < before:
+        print(f'  Dropped {before - len(df):,} GPS outlier rows (IQR filter).')
+
     if df.empty:
         print('No valid predictions to process. Exiting.')
         return
