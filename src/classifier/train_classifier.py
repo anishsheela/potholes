@@ -232,6 +232,8 @@ def main():
     if args.merge_classes:
         print("Merging classes: Excellent/Good -> Good, Fair/Poor -> Bad")
         merge_mapping = {'Excellent': 'Good', 'Good': 'Good', 'Fair': 'Bad', 'Poor': 'Bad'}
+        if args.include_invalid:
+            merge_mapping['Invalid'] = 'Invalid'
         dataset_full = MergedDataset(dataset_full, merge_mapping)
         classes = dataset_full.classes
         print(f"Merged Classes: {classes}")
