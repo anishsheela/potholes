@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Road Quality Assessment — Mid Semester Presentation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<script src="deck-stage.js"></script>
+
+<style>
+  :root {
+    --navy:       #0d1520;
+    --navy-mid:   #131e2e;
+    --navy-card:  #1a2740;
+    --teal:       oklch(72% 0.14 185);
+    --amber:      oklch(78% 0.15 70);
+    --red-soft:   oklch(62% 0.14 25);
+    --green-soft: oklch(70% 0.13 155);
+    --white:      #f2f5f8;
+    --muted:      rgba(242,245,248,0.55);
+    --border:     rgba(255,255,255,0.08);
+
+    --t-title: 68px;
+    --t-body:  34px;
+    --t-small: 28px;
+    --t-label: 24px;
+
+    --px: 110px;
+    --pt: 88px;
+    --pb: 70px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  section {
+    background: var(--navy);
+    color: var(--white);
+    font-family: 'Space Grotesk', sans-serif;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .muted { color: var(--muted); }
+  .teal  { color: var(--teal); }
+  .amber { color: var(--amber); }
+  .green { color: var(--green-soft); }
+  .red   { color: var(--red-soft); }
+
+  .label {
+    font-size: var(--t-label); font-weight: 600;
+    letter-spacing: 0.12em; text-transform: uppercase; color: var(--teal);
+  }
+  .divider { width: 56px; height: 3px; background: var(--teal); border-radius: 2px; margin: 20px 0; }
+
+  .card {
+    background: var(--navy-card); border: 1px solid var(--border);
+    border-radius: 16px; padding: 36px 40px;
+  }
+
+  .pill {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 8px 18px; border-radius: 99px;
+    font-size: var(--t-label); font-weight: 600;
+  }
+  .pill-teal  { background: rgba(20,184,166,0.12); color: var(--teal); border: 1px solid rgba(20,184,166,0.3); }
+  .pill-amber { background: rgba(234,179,8,0.10);  color: var(--amber); border: 1px solid rgba(234,179,8,0.25); }
+
+  .deck-table { width: 100%; border-collapse: collapse; }
+  .deck-table th {
+    font-size: var(--t-label); font-weight: 600; letter-spacing: 0.06em;
+    text-transform: uppercase; color: var(--teal);
+    padding: 16px 20px; border-bottom: 1px solid var(--border); text-align: left;
+  }
+  .deck-table td {
+    padding: 14px 20px; border-bottom: 1px solid var(--border);
+    color: var(--white); font-family: 'Inter', sans-serif; font-size: var(--t-label);
+  }
+  .deck-table tr:last-child td { border-bottom: none; }
+  .deck-table tr.hl td { background: rgba(20,184,166,0.08); }
+  .deck-table tr.hl td:first-child { border-left: 3px solid var(--teal); }
+
+  .pbar-track { height: 12px; background: rgba(255,255,255,0.08); border-radius: 99px; overflow: hidden; }
+  .pbar-fill  { height: 100%; border-radius: 99px; }
+
+  .road-bg { position: absolute; inset: 0; opacity: 0.06; pointer-events: none; }
+
+  /* Annotation platform mock */
+  .anno-screen {
+    background: #1e293b; border-radius: 12px; overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.1);
+    box-shadow: 0 24px 60px rgba(0,0,0,0.5);
+  }
+  .anno-topbar {
+    background: #0f172a; padding: 14px 24px;
+    display: flex; align-items: center; justify-content: space-between;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+
+  /* Swin architecture diagram */
+  .swin-stage {
+    flex: 1; display: flex; flex-direction: column; align-items: center;
+    gap: 10px; text-align: center;
+  }
+  .swin-block {
+    width: 100%; padding: 16px 12px; border-radius: 10px;
+    background: var(--navy-card); border: 1px solid var(--border);
+    font-size: var(--t-label); font-family: 'JetBrains Mono', monospace;
+  }
+  .swin-block.attn { border-color: rgba(20,184,166,0.4); background: rgba(20,184,166,0.06); }
+  .swin-block.merge { border-color: rgba(234,179,8,0.3); background: rgba(234,179,8,0.05); color: var(--amber); }
+</style>
+</head>
+<body>
+<deck-stage width="1920" height="1080">
+
+  <!-- ── 01 TITLE ──────────────────────────────────────────────── -->
+  <section data-label="Title" style="justify-content:center;padding:0 var(--px);position:relative;overflow:hidden;">
+    <svg class="road-bg" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice">
+      <line x1="0" y1="540" x2="1920" y2="540" stroke="white" stroke-width="70"/>
+      <line x1="960" y1="0" x2="960" y2="1080" stroke="white" stroke-width="70"/>
+      <line x1="0" y1="270" x2="1920" y2="270" stroke="white" stroke-width="40"/>
+      <line x1="0" y1="810" x2="1920" y2="810" stroke="white" stroke-width="40"/>
+      <line x1="480" y1="0" x2="480" y2="1080" stroke="white" stroke-width="40"/>
+      <line x1="1440" y1="0" x2="1440" y2="1080" stroke="white" stroke-width="40"/>
+      <line x1="0" y1="540" x2="1920" y2="540" stroke="#14b8a6" stroke-width="3" stroke-dasharray="80 60"/>
+      <line x1="960" y1="0" x2="960" y2="1080" stroke="#14b8a6" stroke-width="3" stroke-dasharray="80 60"/>
+    </svg>
+    <div style="position:absolute;left:0;top:0;bottom:0;width:8px;background:var(--teal);"></div>
+    <div style="max-width:1100px;position:relative;z-index:1;">
+      <div class="label" style="margin-bottom:32px;">M.Tech Dissertation · Mid Semester Presentation · April 2026</div>
+      <h1 style="font-size:80px;font-weight:700;line-height:1.1;letter-spacing:-0.02em;margin-bottom:52px;">
+        Road Quality Assessment<br/>
+        <span class="teal">Using Computer Vision</span><br/>
+        and GPS-Based Mapping
+      </h1>
+      <div style="display:flex;gap:44px;align-items:center;font-family:'Inter',sans-serif;flex-wrap:nowrap;">
+        <div style="flex-shrink:0;">
+          <div style="font-size:var(--t-label);color:var(--muted);">Student</div>
+          <div style="font-size:var(--t-small);font-weight:600;margin-top:6px;white-space:nowrap;">Anish A. · 2024TM93051</div>
+        </div>
+        <div style="width:1px;height:44px;background:var(--border);flex-shrink:0;"></div>
+        <div style="flex-shrink:0;">
+          <div style="font-size:var(--t-label);color:var(--muted);">Program</div>
+          <div style="font-size:var(--t-small);font-weight:600;margin-top:6px;white-space:nowrap;">M.Tech Software Engg · BITS Pilani WILP</div>
+        </div>
+        <div style="width:1px;height:44px;background:var(--border);flex-shrink:0;"></div>
+        <div style="flex-shrink:0;">
+          <div style="font-size:var(--t-label);color:var(--muted);">Supervisor</div>
+          <div style="font-size:var(--t-small);font-weight:600;margin-top:6px;white-space:nowrap;">Dr. Kavya Manohar</div>
+        </div>
+        <div style="width:1px;height:44px;background:var(--border);flex-shrink:0;"></div>
+        <div style="flex-shrink:0;">
+          <div style="font-size:var(--t-label);color:var(--muted);">Additional Examiner</div>
+          <div style="font-size:var(--t-small);font-weight:600;margin-top:6px;white-space:nowrap;">Mr. Ashik Salahudeen</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 02 PROBLEM ────────────────────────────────────────────── -->
+  <section data-label="Problem Statement" style="padding:var(--pt) var(--px) var(--pb);background:var(--navy-mid);">
+    <div class="label">The Problem</div>
+    <div class="divider"></div>
+    <h2 style="font-size:var(--t-title);font-weight:700;letter-spacing:-0.02em;margin-bottom:48px;max-width:1000px;">
+      Navigation systems ignore road surface quality
+    </h2>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:28px;margin-bottom:40px;">
+      <div class="card" style="border-top:3px solid var(--teal);">
+        <div style="font-size:44px;font-weight:700;color:var(--teal);margin-bottom:14px;">Maps</div>
+        <div style="font-size:var(--t-small);font-weight:600;margin-bottom:12px;">Optimise distance &amp; time only</div>
+        <div style="font-size:var(--t-label);color:var(--muted);font-family:'Inter',sans-serif;line-height:1.6;">Road surface quality is invisible to every major navigation system today.</div>
+      </div>
+      <div class="card" style="border-top:3px solid var(--amber);">
+        <div style="font-size:44px;font-weight:700;color:var(--amber);margin-bottom:14px;">🇮🇳 India</div>
+        <div style="font-size:var(--t-small);font-weight:600;margin-bottom:12px;">Uniquely complex road conditions</div>
+        <div style="font-size:var(--t-label);color:var(--muted);font-family:'Inter',sans-serif;line-height:1.6;">High visual clutter, monsoon damage, diverse surfaces. Existing models trained on Japan, US and European datasets perform poorly here.</div>
+      </div>
+      <div class="card" style="border-top:3px solid var(--red-soft);">
+        <div style="font-size:44px;font-weight:700;color:var(--red-soft);margin-bottom:14px;">Surveys</div>
+        <div style="font-size:var(--t-small);font-weight:600;margin-bottom:12px;">Government data is not publicly accessible</div>
+        <div style="font-size:var(--t-label);color:var(--muted);font-family:'Inter',sans-serif;line-height:1.6;">Municipal and government road condition data is not synced or available for general public use.</div>
+      </div>
+    </div>
+    <div style="padding:34px 52px;background:rgba(20,184,166,0.07);border:1px solid rgba(20,184,166,0.25);border-radius:16px;font-size:var(--t-body);font-style:italic;">
+      Can dashcam footage and AI automatically classify road quality and map it at scale for Indian roads?
+    </div>
+  </section>
+
+  <!-- ── 03 PIPELINE ───────────────────────────────────────────── -->
+  <section data-label="System Pipeline" style="padding:var(--pt) var(--px) var(--pb);">
+    <div class="label">End-to-End Pipeline</div>
+    <div class="divider"></div>
+    <h2 style="font-size:var(--t-title);font-weight:700;letter-spacing:-0.02em;margin-bottom:60px;">System Architecture</h2>
+    <div style="display:flex;align-items:flex-start;gap:0;margin-bottom:48px;">
+      <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center;">
+        <div style="width:70px;height:70px;border-radius:50%;background:var(--navy-card);border:2px solid var(--teal);display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:700;color:var(--teal);">1</div>
+        <div style="font-size:var(--t-small);font-weight:700;">Dashcam Video</div>
+        <div style="font-size:var(--t-label);color:var(--muted);font-family:'Inter',sans-serif;line-height:1.5;">4 cameras<br/>Kerala roads</div>
+      </div>
+      <div style="font-size:40px;color:var(--muted);align-self:center;padding:0 6px;margin-top:-26px;">›</div>
+      <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center;">
+        <div style="width:70px;height:70px;border-radius:50%;background:var(--navy-card);border:2px solid var(--teal);display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:700;color:var(--teal);">2</div>
+        <div style="font-size:var(--t-small);font-weight:700;">OCR + Filter</div>
+        <div style="font-size:var(--t-label);color:var(--muted);font-family:'Inter',sans-serif;line-height:1.5;">~34k frames/cam<br/>→ ~26k after filter</div>
+      </div>
+      <div style="font-size:40px;color:var(--muted);align-self:center;padding:0 6px;margin-top:-26px;">›</div>
+      <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center;">
+        <div style="width:70px;height:70px;border-radius:50%;background:var(--navy-card);border:2px solid var(--teal);display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:700;color:var(--teal);">3</div>
+        <div style="font-size:var(--t-small);font-weight:700;">Crowdsourced Consensus Annotation</div>
+        <div style="font-size:var(--t-label);color:var(--muted);font-family:'Inter',sans-serif;line-height:1.5;">3,211 images · 53 contributors<br/>Gamified platform</div>
+      </div>
+      <div style="font-size:40px;color:var(--muted);align-self:center;padding:0 6px;margin-top:-26px;">›</div>
+      <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center;">
+        <div style="width:70px;height:70px;border-radius:50%;background:var(--navy-card);border:2px solid var(--teal);display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:700;color:var(--teal);">4</div>
+        <div style="font-size:var(--t-small);font-weight:700;">Model Training</div>
+        <div style="font-size:var(--t-label);color:var(--muted);font-family:'Inter',sans-serif;line-height:1.5;">15 architectures<br/>72 HP trials</div>
+      </div>
+      <div style="font-size:40px;color:var(--muted);align-self:center;padding:0 6px;margin-top:-26px;">›</div>
+      <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center;">
+        <div style="width:70px;height:70px;border-radius:50%;background:var(--navy-card);border:2px solid var(--teal);display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:700;color:var(--teal);">5</div>
+        <div style="font-size:var(--t-small);font-weight:700;">GPS Snapping</div>
+        <div style="font-size:var(--t-label);color:var(--muted);font-family:'Inter',sans-serif;line-height:1.5;">OSM / osmnx<br/>UTM projection</div>
+      </div>
+      <div style="font-size:40px;color:var(--muted);align-self:center;padding:0 6px;margin-top:-26px;">›</div>
+      <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center;">
+        <div style="width:70px;height:70px;border-radius:50%;background:var(--navy-card);border:2px solid var(--teal);display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:700;color:var(--teal);">6</div>
+        <div style="font-size:var(--t-small);font-weight:700;">Interactive Map</div>
+        <div style="font-size:var(--t-label);color:var(--muted);font-family:'Inter',sans-serif;line-height:1.5;">Folium / Leaflet<br/>808 segments</div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:22px;">
+      <div style="padding:26px 30px;background:var(--navy-card);border:1px solid var(--border);border-radius:12px;">
+        <div style="font-size:var(--t-label);color:var(--muted);font-family:'Inter',sans-serif;margin-bottom:8px;">Key finding</div>
+        <div style="font-size:var(--t-small);font-weight:600;">YOLO detection doesn't work</div>
+        <div style="font-size:var(--t-label);color:var(--muted);font-family:'Inter',sans-serif;margin-top:8px;">Very poor mAP — and finding individual potholes is not the objective. Segment classification is.</div>
+      </div>
+      <div style="padding:26px 30px;background:var(--navy-card);border:1px solid var(--border);border-radius:12px;">
+        <div style="font-size:var(--t-label);color:var(--muted);font-family:'Inter',sans-serif;margin-bottom:8px;">Dataset</div>
+        <div style="font-size:var(--t-small);font-weight:600;">3,211 images</div>
+        <div style="font-size:var(--t-label);color:var(--muted);font-family:'Inter',sans-serif;margin-top:8px;">Annotated by crowdsourcing · 53 contributors</div>
+      </div>
+      <div style="padding:26px 30px;background:var(--navy-card);border:1px solid var(--border);border-radius:12px;">
+        <div style="font-size:var(--t-label);color:var(--muted);font-family:'Inter',sans-serif;margin-bottom:8px;">Best model</div>
+        <div style="font-size:var(--t-small);font-weight:600;color:var(--teal);">Swin-Small</div>
+        <div style="font-size:var(--t-label);color:var(--muted);font-family:'Inter',sans-serif;margin-top:8px;">81.1% acc · 77% F1 (3-class)<br/>53.8% acc · 47% F1 (5-class)</div>
+      </div>
+      <div style="padding:26px 30px;background:var(--navy-card);border:1px solid var(--border);border-radius:12px;">
+        <div style="font-size:var(--t-label);color:var(--muted);font-family:'Inter',sans-serif;margin-bottom:8px;">Output</div>
+        <div style="font-size:var(--t-small);font-weight:600;">808 road segments mapped</div>
+        <div style="font-size:var(--t-label);color:var(--muted);font-family:'Inter',sans-serif;margin-top:8px;">Kerala · Excellent / Good / Fair / Poor / Invalid</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 04 ARCHITECTURE SWEEP ──────────────────────────────────── -->
+  <section data-label="Architecture Sweep" style="padding:var(--pt) var(--px) var(--pb);">
+    <div class="label">Model Selection</div>
+    <div class="divider"></div>
+    <h2 style="font-size:var(--t-title);font-weight:700;letter-spacing:-0.02em;margin-bottom:44px;">
+      15 architectures tested — Swin-Small wins
+    </h2>
+    <div style="display:grid;grid-template-columns:1.5fr 1fr;gap:36px;">
+      <div class="card" style="padding:0;overflow:hidden;">
+        <table class="deck-table">
+          <thead>
+            <tr>
+              <th style="padding-left:28px;">Rank</th>
+              <th>Model</th>
+              <th>Accuracy</th>
+              <th>Macro F1</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="hl">
+              <td style="font-weight:700;color:var(--teal);padding-left:28px;">1</td>
+              <td style="font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--teal);">swin_small ✓</td>
+              <td style="font-weight:700;color:var(--teal);">53.8%</td>
+              <td style="font-weight:700;color:var(--teal);">47.0%</td>
+            </tr>
+            <tr><td style="padding-left:28px;color:var(--muted);">2</td><td style="font-family:'JetBrains Mono',monospace;">swin_tiny</td><td>51.5%</td><td>46.1%</td></tr>
+            <tr><td style="padding-left:28px;color:var(--muted);">3</td><td style="font-family:'JetBrains Mono',monospace;">resnet34</td><td>51.1%</td><td>45.4%</td></tr>
+            <tr><td style="padding-left:28px;color:var(--muted);">4</td><td style="font-family:'JetBrains Mono',monospace;">convnext_tiny</td><td>50.4%</td><td>44.8%</td></tr>
+            <tr><td style="padding-left:28px;color:var(--muted);">5</td><td style="font-family:'JetBrains Mono',monospace;">resnet18</td><td>49.7%</td><td>44.4%</td></tr>
+            <tr><td style="padding-left:28px;color:var(--muted);">6</td><td style="font-family:'JetBrains Mono',monospace;">vit_small</td><td>49.8%</td><td>44.0%</td></tr>
+            <tr><td style="padding-left:28px;color:var(--muted);">7–13</td><td style="color:var(--muted);">EfficientNet, ViT-Base, ConvNeXt…</td><td style="color:var(--muted);">45–50%</td><td style="color:var(--muted);">39–42%</td></tr>
+          </tbody>
+        </table>
+        <div style="padding:16px 28px;font-size:var(--t-label);color:var(--muted);font-family:'Inter',sans-serif;border-top:1px solid var(--border);">Fixed: lr=1e-4 · weighted loss · 5-class · patience=10 · runtime: 1.6 hours</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:20px;">
+        <div class="card" style="border-left:4px solid var(--teal);padding:26px 30px;">
+          <div style="font-size:var(--t-small);font-weight:700;color:var(--teal);margin-bottom:10px;">Why Swin beats ViT here</div>
+          <div style="font-size:var(--t-label);color:var(--muted);font-family:'Inter',sans-serif;line-height:1.6;">Global attention (ViT) is overkill for road texture — a local problem. Swin's hierarchical windows fit the task and generalise better on limited data.</div>
+        </div>
+        <div class="card" style="border-left:4px solid var(--amber);padding:26px 30px;">
+          <div style="font-size:var(--t-small);font-weight:700;color:var(--amber);margin-bottom:10px;">Why not EfficientNet or ResNet?</div>
+          <div style="font-size:var(--t-label);color:var(--muted);font-family:'Inter',sans-serif;line-height:1.6;">Pure CNNs lack the long-range context to understand scene-level road quality. Swin combines local attention with multi-scale feature extraction.</div>
+        </div>
+        <div class="card" style="padding:26px 30px;text-align:center;">
+          <div style="font-size:64px;font-weight:700;color:var(--teal);">15</div>
+          <div style="font-size:var(--t-label);color:var(--muted);font-family:'Inter',sans-serif;margin-top:6px;">architectures evaluated in a single systematic sweep</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section data-label="Swin Transformer Details" style="padding:72px var(--px) 56px;background:var(--navy-mid);">
+    <div class="label">Architecture Deep Dive</div>
+    <div class="divider" style="margin:18px 0;"></div>
+    <h2 style="font-size:60px;font-weight:700;letter-spacing:-0.02em;margin-bottom:36px;">
+      Swin Transformer — <span class="teal">swin_small_patch4_window7_224</span>
+    </h2>
+    <div style="margin-bottom:24px;font-size:var(--t-label);color:var(--muted);font-family:'Inter',sans-serif;">Liu et al., Microsoft Research · <em>"Swin Transformer: Hierarchical Vision Transformer using Shifted Windows"</em> · ICCV 2021</div>
+
+    <div style="display:grid;grid-template-columns:2fr 1fr;gap:32px;">
+      <!-- Left: architecture diagram -->
+      <div>
+        <div style="display:flex;gap:6px;margin-bottom:20px;align-items:center;">
+          <!-- Input -->
+          <div style="display:flex;flex-direction:column;gap:5px;align-items:center;text-align:center;flex:0 0 120px;">
+            <div style="font-size:var(--t-label);color:var(--muted);font-family:'Inter',sans-serif;">Input</div>
+            <div class="swin-block" style="font-size:var(--t-label);padding:10px 8px;">224×224×3</div>
+            <div style="font-size:22px;color:var(--muted);">↓</div>
+            <div class="swin-block merge" style="font-size:var(--t-label);padding:10px 8px;">Patch Embed<br/>→56×56×96</div>
+          </div>
+          <div style="font-size:24px;color:var(--muted);flex-shrink:0;">›</div>
+          <!-- Stage 1 -->
+          <div class="swin-stage" style="flex:1;">
+            <div style="font-size:var(--t-label);color:var(--teal);font-weight:700;white-space:nowrap;">Stage 1</div>
+            <div class="swin-block attn" style="font-size:var(--t-label);padding:10px 6px;">W-MSA<br/>56×56 C=96</div>
+            <div class="swin-block attn" style="font-size:var(--t-label);padding:10px 6px;">SW-MSA</div>
+            <div class="swin-block merge" style="font-size:var(--t-label);padding:10px 6px;">Merge<br/>28×28×192</div>
+          </div>
+          <div style="font-size:24px;color:var(--muted);flex-shrink:0;">›</div>
+          <!-- Stage 2 -->
+          <div class="swin-stage" style="flex:1;">
+            <div style="font-size:var(--t-label);color:var(--teal);font-weight:700;white-space:nowrap;">Stage 2</div>
+            <div class="swin-block attn" style="font-size:var(--t-label);padding:10px 6px;">W-MSA<br/>28×28 C=192</div>
+            <div class="swin-block attn" style="font-size:var(--t-label);padding:10px 6px;">SW-MSA</div>
+            <div class="swin-block merge" style="font-size:var(--t-label);padding:10px 6px;">Merge<br/>14×14×384</div>
+          </div>
+          <div style="font-size:24px;color:var(--muted);flex-shrink:0;">›</div>
+          <!-- Stage 3 -->
+          <div class="swin-stage" style="flex:1;">
+            <div style="font-size:var(--t-label);color:var(--teal);font-weight:700;white-space:nowrap;">Stage 3</div>
+            <div class="swin-block attn" style="font-size:var(--t-label);padding:10px 6px;">W-MSA<br/>14×14 C=384</div>
+            <div class="swin-block attn" style="font-size:var(--t-label);padding:10px 6px;">SW-MSA ×6</div>
+            <div class="swin-block merge" style="font-size:var(--t-label);padding:10px 6px;">Merge<br/>7×7×768</div>
+          </div>
+          <div style="font-size:24px;color:var(--muted);flex-shrink:0;">›</div>
+          <!-- Stage 4 -->
+          <div class="swin-stage" style="flex:1;">
+            <div style="font-size:var(--t-label);color:var(--teal);font-weight:700;white-space:nowrap;">Stage 4</div>
+            <div class="swin-block attn" style="font-size:var(--t-label);padding:10px 6px;">W-MSA<br/>7×7 C=768</div>
+            <div class="swin-block attn" style="font-size:var(--t-label);padding:10px 6px;">SW-MSA</div>
+            <div class="swin-block" style="font-size:var(--t-label);padding:10px 6px;color:var(--teal);border-color:rgba(20,184,166,0.4);">AvgPool→FC<br/>3 classes</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:14px;">
+          <div style="padding:12px 16px;background:rgba(20,184,166,0.07);border:1px solid rgba(20,184,166,0.2);border-radius:10px;font-size:var(--t-label);font-family:'JetBrains Mono',monospace;flex:1;text-align:center;"><span style="color:var(--teal);">W-MSA</span> — Window Self-Attention (7×7)</div>
+          <div style="padding:12px 16px;background:rgba(234,179,8,0.06);border:1px solid rgba(234,179,8,0.2);border-radius:10px;font-size:var(--t-label);font-family:'JetBrains Mono',monospace;flex:1;text-align:center;"><span style="color:var(--amber);">SW-MSA</span> — Shifted Window (cross-boundary context)</div>
+        </div>
+      </div>
+
+      <!-- Right: specs + why -->
+      <div style="display:flex;flex-direction:column;gap:16px;">
+        <div class="card" style="padding:22px 26px;">
+          <div style="font-size:var(--t-small);font-weight:700;color:var(--teal);margin-bottom:14px;">Model Specs</div>
+          <div style="display:flex;flex-direction:column;gap:8px;font-family:'JetBrains Mono',monospace;font-size:var(--t-label);">
+            <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border);"><span class="muted">Params</span><span style="font-weight:700;">~49M</span></div>
+            <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border);"><span class="muted">Input</span><span>224×224</span></div>
+            <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border);"><span class="muted">Patch</span><span>4×4</span></div>
+            <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border);"><span class="muted">Window</span><span>7×7</span></div>
+            <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border);"><span class="muted">Pretrain</span><span style="color:var(--teal);white-space:nowrap;">IN-22k</span></div>
+            <div style="display:flex;justify-content:space-between;padding:5px 0;"><span class="muted">LR</span><span style="color:var(--teal);white-space:nowrap;">3e-5</span></div>
+          </div>
+        </div>
+        <div class="card" style="padding:22px 26px;">
+          <div style="font-size:var(--t-small);font-weight:700;color:var(--teal);margin-bottom:12px;">Why this fits</div>
+          <div style="font-size:var(--t-label);color:var(--muted);font-family:'Inter',sans-serif;line-height:1.6;">
+            <strong style="color:var(--white);">Local texture:</strong> potholes are local — 7×7 windows match this.<br/><br/>
+            <strong style="color:var(--white);">Shifted windows:</strong> prevents attention blind spots at boundaries.<br/><br/>
+            <strong style="color:var(--white);">Hierarchical:</strong> multi-scale features for fine detail + scene context.
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 06 HYPERPARAMETER TUNING ───────────────────────────────── -->
+  <section data-label="Hyperparameter Tuning" style="padding:var(--pt) var(--px) var(--pb);">
+    <div class="label">Hyper Parameter Tuning</div>
+    <div class="divider"></div>
+    <h2 style="font-size:var(--t-title);font-weight:700;letter-spacing:-0.02em;margin-bottom:44px;">
+      72 trials · ~14 hours · optimal config found
+    </h2>
+    <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:36px;">
+      <div class="card" style="padding:32px 36px;">
+        <div style="font-size:var(--t-small);font-weight:700;margin-bottom:24px;">Average F1 by parameter value</div>
+        <div style="display:flex;flex-direction:column;gap:24px;">
+          <div>
+            <div style="font-size:var(--t-label);color:var(--muted);font-family:'Inter',sans-serif;margin-bottom:12px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;">Learning Rate</div>
+            <div style="display:flex;flex-direction:column;gap:8px;">
+              <div style="display:flex;align-items:center;gap:12px;">
+                <span style="font-family:'JetBrains Mono',monospace;font-size:var(--t-label);min-width:72px;color:var(--teal);font-weight:700;white-space:nowrap;">3e-5</span>
+                <div class="pbar-track" style="flex:1;"><div class="pbar-fill" style="width:100%;background:var(--teal);"></div></div>
+                <span style="font-size:var(--t-label);font-weight:700;color:var(--teal);">51.9% ✓</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:12px;">
+                <span style="font-family:'JetBrains Mono',monospace;font-size:var(--t-label);min-width:72px;color:var(--muted);white-space:nowrap;">1e-4</span>
+                <div class="pbar-track" style="flex:1;"><div class="pbar-fill" style="width:93%;background:var(--muted);"></div></div>
+                <span style="font-size:var(--t-label);color:var(--muted);">51.7%</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:12px;">
+                <span style="font-family:'JetBrains Mono',monospace;font-size:var(--t-label);min-width:72px;color:var(--muted);white-space:nowrap;">3e-4</span>
+                <div class="pbar-track" style="flex:1;"><div class="pbar-fill" style="width:93%;background:var(--muted);"></div></div>
+                <span style="font-size:var(--t-label);color:var(--muted);">51.7%</span>
+              </div>
+            </div>
+          </div>
+          <div style="height:1px;background:var(--border);"></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:24px;">
+            <div>
+              <div style="font-size:var(--t-label);color:var(--muted);margin-bottom:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;font-family:'Inter',sans-serif;">Freeze</div>
+              <div style="font-size:var(--t-small);font-weight:700;color:var(--teal);">None</div>
+              <div style="font-size:var(--t-label);color:var(--muted);font-family:'Inter',sans-serif;">52.1% ← best</div>
+            </div>
+            <div>
+              <div style="font-size:var(--t-label);color:var(--muted);margin-bottom:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;font-family:'Inter',sans-serif;">Smoothing</div>
+              <div style="font-size:var(--t-small);font-weight:700;color:var(--teal);">None</div>
+              <div style="font-size:var(--t-label);color:var(--muted);font-family:'Inter',sans-serif;">51.9% ← best</div>
+            </div>
+            <div>
+              <div style="font-size:var(--t-label);color:var(--muted);margin-bottom:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;font-family:'Inter',sans-serif;">Weighted Sampling</div>
+              <div style="font-size:var(--t-small);font-weight:700;color:var(--teal);">Unweighted</div>
+              <div style="font-size:var(--t-label);color:var(--muted);font-family:'Inter',sans-serif;">52.0% ← best</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:20px;">
+        <div style="padding:32px 36px;background:rgba(20,184,166,0.07);border:1px solid rgba(20,184,166,0.25);border-radius:16px;">
+          <div style="font-size:var(--t-small);font-weight:700;color:var(--teal);margin-bottom:18px;">Optimal Configuration</div>
+          <div style="display:flex;flex-direction:column;gap:12px;font-family:'JetBrains Mono',monospace;font-size:var(--t-label);">
+            <div style="display:flex;justify-content:space-between;"><span class="muted">model</span><span style="color:var(--teal);font-weight:700;">swin_small</span></div>
+            <div style="display:flex;justify-content:space-between;"><span class="muted">lr</span><span style="color:var(--teal);font-weight:700;white-space:nowrap;">3e-5</span></div>
+            <div style="display:flex;justify-content:space-between;"><span class="muted">freeze</span><span style="color:var(--teal);font-weight:700;white-space:nowrap;">none</span></div>
+            <div style="display:flex;justify-content:space-between;"><span class="muted">smoothing</span><span style="color:var(--teal);font-weight:700;white-space:nowrap;">0.0</span></div>
+            <div style="display:flex;justify-content:space-between;"><span class="muted">loss</span><span style="color:var(--teal);font-weight:700;white-space:nowrap;">unweighted CE</span></div>
+            <div style="display:flex;justify-content:space-between;"><span class="muted">scheduler</span><span style="color:var(--teal);font-weight:700;white-space:nowrap;">cosine</span></div>
+          </div>
+        </div>
+        <div class="card" style="padding:28px 32px;">
+          <div style="font-size:var(--t-label);color:var(--muted);font-family:'Inter',sans-serif;margin-bottom:8px;">Best trial (5-class)</div>
+          <div style="display:flex;gap:24px;">
+            <div><div style="font-size:52px;font-weight:700;color:var(--amber);">53.2%</div><div style="font-size:var(--t-label);color:var(--muted);font-family:'Inter',sans-serif;">Accuracy</div></div>
+            <div><div style="font-size:52px;font-weight:700;color:var(--amber);">56.8%</div><div style="font-size:var(--t-label);color:var(--muted);font-family:'Inter',sans-serif;">Macro F1</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 07 RESULTS ─────────────────────────────────────────────── -->
+  <section data-label="Results" style="padding:var(--pt) var(--px) var(--pb);background:var(--navy-mid);">
+    <div class="label">Final Results</div>
+    <div class="divider"></div>
+    <h2 style="font-size:64px;font-weight:700;letter-spacing:-0.02em;margin-bottom:44px;">
+      3-class merging and retraining delivers the breakthrough
+    </h2>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:32px;margin-bottom:32px;">
+      <div style="padding:36px 40px;background:rgba(234,179,8,0.04);border:1px solid rgba(234,179,8,0.2);border-radius:20px;">
+        <div style="font-size:var(--t-label);font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--amber);margin-bottom:20px;">5-Class · Excellent / Good / Fair / Poor / Invalid</div>
+        <div style="display:flex;gap:40px;margin-bottom:24px;">
+          <div><div style="font-size:80px;font-weight:700;color:var(--amber);line-height:1;">53%</div><div style="font-size:var(--t-small);color:var(--muted);font-family:'Inter',sans-serif;margin-top:8px;">Accuracy</div></div>
+          <div><div style="font-size:80px;font-weight:700;color:var(--amber);line-height:1;">57%</div><div style="font-size:var(--t-small);color:var(--muted);font-family:'Inter',sans-serif;margin-top:8px;">Macro F1</div></div>
+        </div>
+        <div style="font-size:var(--t-label);color:var(--muted);font-family:'Inter',sans-serif;line-height:1.6;">Excellent↔Good and Fair↔Poor boundaries are visually ambiguous. Annotators disagreed on these pairs — fine-grained classes don't exist cleanly in the data.</div>
+      </div>
+      <div style="padding:36px 40px;background:rgba(20,184,166,0.05);border:1px solid rgba(20,184,166,0.25);border-radius:20px;">
+        <div style="font-size:var(--t-label);font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--teal);margin-bottom:20px;">3-Class · Bad / Good / Invalid — Adopted ✓</div>
+        <div style="display:flex;gap:40px;margin-bottom:24px;">
+          <div><div style="font-size:80px;font-weight:700;color:var(--teal);line-height:1;">81%</div><div style="font-size:var(--t-small);color:var(--muted);font-family:'Inter',sans-serif;margin-top:8px;">Accuracy</div></div>
+          <div><div style="font-size:80px;font-weight:700;color:var(--teal);line-height:1;">77%</div><div style="font-size:var(--t-small);color:var(--muted);font-family:'Inter',sans-serif;margin-top:8px;">Macro F1</div></div>
+        </div>
+        <div style="font-size:var(--t-label);color:var(--muted);font-family:'Inter',sans-serif;line-height:1.6;">Excellent+Good→Good · Fair+Poor→Bad. Directly answers the navigation question: <em>"Is this segment safe to drive?"</em></div>
+        <div style="margin-top:16px;padding:14px 18px;background:rgba(255,255,255,0.04);border-left:3px solid var(--amber);border-radius:6px;">
+          <div style="font-size:var(--t-label);color:var(--amber);font-weight:600;margin-bottom:4px;">Note — Hyperparameters</div>
+          <div style="font-size:var(--t-label);color:var(--muted);font-family:'Inter',sans-serif;line-height:1.5;">Trained separately on merged labels, but reuses 5-class hyperparameters. No dedicated HPO run yet — tuning for 3-class is a clear next step.</div>
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:center;gap:40px;padding:26px 48px;background:var(--navy-card);border:1px solid var(--border);border-radius:14px;">
+      <div style="font-size:44px;font-weight:700;color:var(--amber);">5-class: 53%</div>
+      <div style="font-size:44px;color:var(--teal);">→</div>
+      <div style="font-size:44px;font-weight:700;color:var(--teal);">3-class: 81%</div>
+      <div style="width:1px;height:40px;background:var(--border);"></div>
+      <div style="font-size:var(--t-small);font-weight:700;color:var(--green-soft);">+28 pp · further gains expected with dedicated HPO</div>
+    </div>
+  </section>
+
+
+
+  <!-- ── 08 DEMO ───────────────────────────────────────────────── -->
+  <section data-label="Demo" style="display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;position:relative;overflow:hidden;background:var(--navy-mid);">
+    <svg class="road-bg" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice">
+      <line x1="0" y1="540" x2="1920" y2="540" stroke="white" stroke-width="70"/>
+      <line x1="960" y1="0" x2="960" y2="1080" stroke="white" stroke-width="70"/>
+      <line x1="0" y1="540" x2="1920" y2="540" stroke="#14b8a6" stroke-width="3" stroke-dasharray="80 60"/>
+      <line x1="960" y1="0" x2="960" y2="1080" stroke="#14b8a6" stroke-width="3" stroke-dasharray="80 60"/>
+    </svg>
+    <div style="position:absolute;left:0;top:0;bottom:0;width:8px;background:var(--teal);"></div>
+    <div style="position:relative;z-index:1;max-width:900px;">
+      <div class="label" style="margin-bottom:36px;">Live Demonstration</div>
+      <h1 style="font-size:120px;font-weight:700;letter-spacing:-0.03em;line-height:1;margin-bottom:52px;color:var(--teal);">Demo</h1>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;max-width:900px;">
+        <div style="padding:28px 36px;background:rgba(20,184,166,0.08);border:1px solid rgba(20,184,166,0.25);border-radius:12px;text-align:left;">
+          <div style="font-size:44px;font-weight:700;color:var(--teal);margin-bottom:8px;">1</div>
+          <div style="font-size:var(--t-small);font-weight:700;">Crowdsourced Annotation Platform</div>
+        </div>
+        <div style="padding:28px 36px;background:rgba(20,184,166,0.08);border:1px solid rgba(20,184,166,0.25);border-radius:12px;text-align:left;">
+          <div style="font-size:44px;font-weight:700;color:var(--teal);margin-bottom:8px;">2</div>
+          <div style="font-size:var(--t-small);font-weight:700;">Road Quality Maps<br/><span style="font-size:var(--t-label);color:var(--muted);font-weight:400;">5-class &amp; 3-class</span></div>
+        </div>
+        <div style="padding:28px 36px;background:rgba(20,184,166,0.08);border:1px solid rgba(20,184,166,0.25);border-radius:12px;text-align:left;">
+          <div style="font-size:44px;font-weight:700;color:var(--teal);margin-bottom:8px;">3</div>
+          <div style="font-size:var(--t-small);font-weight:700;">Label Studio Labeling Tool</div>
+        </div>
+        <div style="padding:28px 36px;background:rgba(20,184,166,0.08);border:1px solid rgba(20,184,166,0.25);border-radius:12px;text-align:left;">
+          <div style="font-size:44px;font-weight:700;color:var(--teal);margin-bottom:8px;">4</div>
+          <div style="font-size:var(--t-small);font-weight:700;">YOLO Detection Examples</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 09 COMPLETION TASKS ────────────────────────────────────── -->
+  <section data-label="Completion Tasks" style="padding:var(--pt) var(--px) var(--pb);">
+    <div class="label">Remaining Work</div>
+    <div class="divider"></div>
+    <h2 style="font-size:var(--t-title);font-weight:700;letter-spacing:-0.02em;margin-bottom:44px;">
+      All tasks complete by <span class="teal">May 1</span> — final report submission
+    </h2>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:28px;">
+      <div style="display:flex;flex-direction:column;gap:18px;">
+        <div style="display:flex;gap:20px;align-items:flex-start;padding:28px 32px;background:rgba(20,184,166,0.05);border:1px solid rgba(20,184,166,0.2);border-radius:14px;">
+          <div style="width:44px;height:44px;border-radius:50%;background:rgba(20,184,166,0.12);border:2px solid var(--teal);display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;color:var(--teal);flex-shrink:0;">1</div>
+          <div>
+            <div style="font-size:var(--t-small);font-weight:700;">Fix bugs in Maps</div>
+            <div style="font-size:var(--t-label);color:var(--muted);font-family:'Inter',sans-serif;margin-top:8px;line-height:1.6;">Resolve 3-class map rendering issues · validate GPS snapping accuracy · test both aggregation modes (pessimistic / majority)</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:20px;align-items:flex-start;padding:28px 32px;background:rgba(20,184,166,0.05);border:1px solid rgba(20,184,166,0.2);border-radius:14px;">
+          <div style="width:44px;height:44px;border-radius:50%;background:rgba(20,184,166,0.12);border:2px solid var(--teal);display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;color:var(--teal);flex-shrink:0;">2</div>
+          <div>
+            <div style="font-size:var(--t-small);font-weight:700;">Merge remaining classification / dataset</div>
+            <div style="font-size:var(--t-label);color:var(--muted);font-family:'Inter',sans-serif;margin-top:8px;line-height:1.6;">Consolidate any outstanding annotations · finalise 3-class label mapping · re-train on full merged dataset</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:20px;align-items:flex-start;padding:28px 32px;background:rgba(20,184,166,0.05);border:1px solid rgba(20,184,166,0.2);border-radius:14px;">
+          <div style="width:44px;height:44px;border-radius:50%;background:rgba(20,184,166,0.12);border:2px solid var(--teal);display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;color:var(--teal);flex-shrink:0;">3</div>
+          <div>
+            <div style="font-size:var(--t-small);font-weight:700;">End-to-End Integration Test</div>
+            <div style="font-size:var(--t-label);color:var(--muted);font-family:'Inter',sans-serif;margin-top:8px;line-height:1.6;">Full pipeline run: dashcam video → OCR → filter → classify → GPS snap → Folium map output · validate results on held-out test data</div>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:18px;">
+        <div style="display:flex;gap:20px;align-items:flex-start;padding:28px 32px;background:rgba(20,184,166,0.05);border:1px solid rgba(20,184,166,0.2);border-radius:14px;">
+          <div style="width:44px;height:44px;border-radius:50%;background:rgba(20,184,166,0.12);border:2px solid var(--teal);display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;color:var(--teal);flex-shrink:0;">4</div>
+          <div>
+            <div style="font-size:var(--t-small);font-weight:700;">Anonymise &amp; release annotated dataset</div>
+            <div style="font-size:var(--t-label);color:var(--muted);font-family:'Inter',sans-serif;margin-top:8px;line-height:1.6;">Remove personally identifiable information from frames · prepare dataset card · open release for research community</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:20px;align-items:flex-start;padding:28px 32px;background:rgba(20,184,166,0.05);border:1px solid rgba(20,184,166,0.2);border-radius:14px;">
+          <div style="width:44px;height:44px;border-radius:50%;background:rgba(20,184,166,0.12);border:2px solid var(--teal);display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;color:var(--teal);flex-shrink:0;">5</div>
+          <div>
+            <div style="font-size:var(--t-small);font-weight:700;">Report writing</div>
+            <div style="font-size:var(--t-label);color:var(--muted);font-family:'Inter',sans-serif;margin-top:8px;line-height:1.6;">Complete dissertation: methodology, results, discussion, conclusions, future work · supervisor review and final submission</div>
+          </div>
+        </div>
+        <!-- Deadline callout -->
+        <div style="padding:28px 36px;background:rgba(20,184,166,0.08);border:2px solid rgba(20,184,166,0.3);border-radius:14px;display:flex;align-items:center;gap:28px;">
+          <div>
+            <div style="font-size:64px;font-weight:700;color:var(--teal);line-height:1;">May 1</div>
+            <div style="font-size:var(--t-label);color:var(--muted);font-family:'Inter',sans-serif;margin-top:6px;">Final report submission deadline</div>
+          </div>
+          <div style="width:1px;height:60px;background:rgba(20,184,166,0.3);"></div>
+          <div style="font-size:var(--t-label);color:var(--muted);font-family:'Inter',sans-serif;line-height:1.7;">
+            All 5 tasks targeted for completion<br/>within April 2026.<br/><br/>
+            <strong style="color:var(--white);">No critical risks.</strong> GPS, model, and map<br/>pipeline are all operational.
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 10 THANK YOU ───────────────────────────────────────────── -->
+  <section data-label="Thank You" style="display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;position:relative;overflow:hidden;">
+    <svg class="road-bg" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice">
+      <line x1="0" y1="540" x2="1920" y2="540" stroke="white" stroke-width="80"/>
+      <line x1="960" y1="0" x2="960" y2="1080" stroke="white" stroke-width="80"/>
+      <line x1="0" y1="540" x2="1920" y2="540" stroke="#14b8a6" stroke-width="4" stroke-dasharray="120 80"/>
+    </svg>
+    <div style="position:absolute;left:0;top:0;bottom:0;width:8px;background:var(--teal);"></div>
+    <div style="position:relative;z-index:1;max-width:900px;padding:0 var(--px);">
+      <div class="label" style="margin-bottom:32px;">M.Tech Dissertation · BITS Pilani WILP · 2025–2026</div>
+      <h1 style="font-size:80px;font-weight:700;letter-spacing:-0.02em;line-height:1.1;margin-bottom:48px;">Thank You</h1>
+      <div style="font-size:var(--t-body);color:var(--muted);font-family:'Inter',sans-serif;margin-bottom:56px;line-height:1.6;">
+        Road Quality Assessment System Using Computer Vision and GPS-Based Mapping
+      </div>
+      <div style="display:flex;justify-content:center;gap:56px;font-family:'Inter',sans-serif;flex-wrap:nowrap;">
+        <div style="flex-shrink:0;">
+          <div style="font-size:var(--t-label);color:var(--muted);">Student</div>
+          <div style="font-size:var(--t-small);font-weight:600;margin-top:6px;white-space:nowrap;">Anish A. · 2024TM93051</div>
+        </div>
+        <div style="width:1px;background:var(--border);flex-shrink:0;"></div>
+        <div style="flex-shrink:0;">
+          <div style="font-size:var(--t-label);color:var(--muted);">Supervisor</div>
+          <div style="font-size:var(--t-small);font-weight:600;margin-top:6px;white-space:nowrap;">Dr. Kavya Manohar</div>
+        </div>
+        <div style="width:1px;background:var(--border);flex-shrink:0;"></div>
+        <div style="flex-shrink:0;">
+          <div style="font-size:var(--t-label);color:var(--muted);">Additional Examiner</div>
+          <div style="font-size:var(--t-small);font-weight:600;margin-top:6px;white-space:nowrap;">Mr. Ashik Salahudeen</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</deck-stage>
+
+<template id="__bundler_thumbnail">
+  <svg viewBox="0 0 120 80" xmlns="http://www.w3.org/2000/svg">
+    <rect width="120" height="80" fill="#0d1520"/>
+    <rect x="0" y="0" width="4" height="80" fill="#14b8a6"/>
+    <line x1="0" y1="40" x2="120" y2="40" stroke="#14b8a6" stroke-width="2" stroke-dasharray="12 8" opacity="0.4"/>
+    <circle cx="40" cy="40" r="5" fill="#22c55e"/>
+    <circle cx="70" cy="38" r="5" fill="#ef4444"/>
+    <circle cx="95" cy="41" r="5" fill="#22c55e"/>
+    <text x="8" y="24" fill="white" font-size="8" font-family="sans-serif" font-weight="bold">Road Quality</text>
+    <text x="8" y="34" fill="#14b8a6" font-size="6" font-family="sans-serif">CV + GPS Mapping</text>
+    <text x="8" y="70" fill="rgba(255,255,255,0.4)" font-size="5" font-family="sans-serif">Anish A. · 2024TM93051</text>
+  </svg>
+</template>
+</body>
+</html>

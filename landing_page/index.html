@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Road Quality Intelligence — Anish Anilkumar</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:ital,wght@0,400;0,500;1,400&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:        #07070f;
+      --bg-2:      #0d0d1c;
+      --bg-3:      #111124;
+      --border:    #1a1a32;
+      --border-hi: #28284a;
+      --text:      #d8daf0;
+      --text-dim:  #7a7a9a;
+      --text-muted:#44446a;
+      --red:    #d73027;
+      --amber:  #f4a11d;
+      --ygreen: #a8c92e;
+      --green:  #1a9850;
+      --fd: 'Bebas Neue', sans-serif;
+      --fm: 'IBM Plex Mono', monospace;
+      --fb: 'IBM Plex Sans', sans-serif;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--fb);
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+      opacity: 0.028; pointer-events: none; z-index: 9000;
+    }
+
+    body::after {
+      content: '';
+      position: fixed; inset: 0;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.018) 1px, transparent 1px);
+      background-size: 64px 64px;
+      pointer-events: none; z-index: 0;
+    }
+
+    /* ── HERO ─────────────────────────────────────── */
+    .hero {
+      position: relative;
+      min-height: 100vh;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      text-align: center;
+      padding: 2rem 1.5rem 5rem;
+      overflow: hidden; z-index: 1;
+    }
+
+    .glow { position: absolute; border-radius: 50%; filter: blur(130px); pointer-events: none; }
+    .glow-1 { width: 600px; height: 600px; background: radial-gradient(circle, rgba(26,152,80,.14), transparent 65%);  top: -150px; left: -120px; }
+    .glow-2 { width: 500px; height: 500px; background: radial-gradient(circle, rgba(215,48,39,.10), transparent 65%); bottom: -80px; right: -80px; }
+    .glow-3 { width: 350px; height: 350px; background: radial-gradient(circle, rgba(244,161,29,.08), transparent 65%); top: 30%; right: 5%; }
+
+    .eyebrow {
+      font-family: var(--fm);
+      font-size: .7rem; letter-spacing: .28em; text-transform: uppercase;
+      color: var(--ygreen); margin-bottom: 1.5rem;
+      opacity: 0; animation: fadeUp .7s ease .15s forwards;
+    }
+
+    .hero-title {
+      font-family: var(--fd);
+      font-size: clamp(3rem, 7vw, 6rem);
+      line-height: .9; letter-spacing: .025em;
+      background: linear-gradient(160deg, #fff 10%, #9090b8 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+      margin-bottom: 1.25rem;
+      opacity: 0; animation: fadeUp .7s ease .3s forwards;
+    }
+
+    .quality-bar {
+      display: flex; width: min(320px, 88vw); height: 5px;
+      border-radius: 3px; overflow: hidden;
+      margin: 0 auto 1.75rem;
+      opacity: 0; animation: fadeUp .7s ease .45s forwards;
+    }
+    .quality-bar span { flex: 1; transform: scaleX(0); transform-origin: left; animation: barGrow 1.2s cubic-bezier(.22,1,.36,1) forwards; }
+    .quality-bar span:nth-child(1) { background: var(--red);    animation-delay: .9s; }
+    .quality-bar span:nth-child(2) { background: var(--amber);  animation-delay: 1.05s; }
+    .quality-bar span:nth-child(3) { background: var(--ygreen); animation-delay: 1.2s; }
+    .quality-bar span:nth-child(4) { background: var(--green);  animation-delay: 1.35s; }
+    @keyframes barGrow { to { transform: scaleX(1); } }
+
+    .hero-tagline {
+      font-size: clamp(.9rem, 2vw, 1.1rem); color: var(--text-dim);
+      max-width: 520px; font-weight: 300; margin-bottom: 1rem;
+      opacity: 0; animation: fadeUp .7s ease .6s forwards;
+    }
+
+    .hero-dissertation {
+      font-family: var(--fm); font-size: .72rem; font-style: italic;
+      color: var(--text-muted); letter-spacing: .02em;
+      max-width: 480px; line-height: 1.6; margin-bottom: .75rem;
+      opacity: 0; animation: fadeUp .7s ease .65s forwards;
+    }
+
+    .hero-meta {
+      font-family: var(--fm); font-size: .72rem; color: var(--text-muted);
+      letter-spacing: .08em; margin-bottom: 2.5rem;
+      opacity: 0; animation: fadeUp .7s ease .78s forwards;
+    }
+    .hero-meta strong { color: var(--text-dim); }
+    .hero-meta a, .footer-tag a {
+      color: inherit; text-decoration: none;
+      border-bottom: 1px solid rgba(168,201,46,.25);
+      transition: color .2s, border-color .2s;
+    }
+    .hero-meta a:hover, .footer-tag a:hover {
+      color: var(--ygreen); border-color: rgba(168,201,46,.6);
+    }
+
+    .hero-actions {
+      display: flex; gap: .875rem; flex-wrap: wrap; justify-content: center;
+      opacity: 0; animation: fadeUp .7s ease .85s forwards;
+    }
+
+    .btn {
+      display: inline-flex; align-items: center; gap: .5rem;
+      padding: .75rem 1.5rem; border-radius: 3px;
+      font-family: var(--fm); font-size: .78rem; letter-spacing: .07em;
+      text-decoration: none;
+      transition: transform .2s, box-shadow .2s, background .2s, border-color .2s;
+    }
+    .btn-solid  { background: var(--green); color: #fff; border: 1px solid var(--green); }
+    .btn-solid:hover { background: #22bb62; transform: translateY(-2px); box-shadow: 0 10px 28px rgba(26,152,80,.35); }
+    .btn-ghost  { border: 1px solid var(--border-hi); color: var(--text-dim); }
+    .btn-ghost:hover  { border-color: var(--text-dim); color: var(--text); transform: translateY(-2px); }
+
+    .scroll-cue {
+      position: absolute; bottom: 2rem; left: 50%; transform: translateX(-50%);
+      display: flex; flex-direction: column; align-items: center; gap: .4rem;
+      color: var(--text-muted); font-family: var(--fm);
+      font-size: .6rem; letter-spacing: .2em;
+      animation: scrollBob 2.4s ease infinite;
+    }
+    @keyframes scrollBob {
+      0%,100% { transform: translateX(-50%) translateY(0); }
+      55%      { transform: translateX(-50%) translateY(7px); }
+    }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(18px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── SHARED LAYOUT ──────────────────────────── */
+    .section {
+      position: relative; z-index: 1;
+      padding: 6rem 2rem; max-width: 1180px; margin: 0 auto;
+    }
+    .section-label {
+      font-family: var(--fm); font-size: .68rem; letter-spacing: .3em;
+      text-transform: uppercase; color: var(--ygreen); margin-bottom: .6rem;
+    }
+    .section-title {
+      font-family: var(--fd); font-size: clamp(2.2rem, 4.5vw, 3.8rem);
+      letter-spacing: .02em;
+      background: linear-gradient(140deg, #fff 0%, #7070a0 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+      margin-bottom: .9rem;
+    }
+    .section-desc {
+      color: var(--text-dim); font-size: 1rem; max-width: 520px;
+      font-weight: 300; margin-bottom: 3.5rem; line-height: 1.75;
+    }
+
+    /* ── MAP CARDS ──────────────────────────────── */
+    .maps-wrap {
+      background: linear-gradient(to bottom, var(--bg), var(--bg-2) 30%, var(--bg-2) 70%, var(--bg));
+      border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+    }
+
+    .maps-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; }
+    @media (max-width: 720px) { .maps-grid { grid-template-columns: 1fr; } }
+
+    .map-card {
+      background: var(--bg-3); border: 1px solid var(--border);
+      border-radius: 10px; overflow: hidden;
+      display: flex; flex-direction: column;
+      transition: border-color .3s, transform .3s, box-shadow .3s;
+    }
+    .map-card:hover { transform: translateY(-5px); }
+    .map-card.card-5:hover { border-color: rgba(26,152,80,.45);  box-shadow: 0 20px 60px rgba(26,152,80,.08); }
+    .map-card.card-3:hover { border-color: rgba(244,161,29,.45); box-shadow: 0 20px 60px rgba(244,161,29,.08); }
+
+    .preview { height: 190px; background: #050510; overflow: hidden; }
+    .preview svg { width: 100%; height: 100%; }
+
+    .map-body { padding: 1.75rem; flex: 1; display: flex; flex-direction: column; }
+
+    .map-badge {
+      display: inline-block; font-family: var(--fm);
+      font-size: .62rem; letter-spacing: .18em; text-transform: uppercase;
+      padding: .25rem .65rem; border-radius: 2px; margin-bottom: 1rem;
+    }
+    .badge-5 { background: rgba(26,152,80,.12);  color: var(--green);  border: 1px solid rgba(26,152,80,.28); }
+    .badge-3 { background: rgba(244,161,29,.12); color: var(--amber); border: 1px solid rgba(244,161,29,.28); }
+
+    .map-name { font-family: var(--fd); font-size: 2rem; letter-spacing: .02em; color: #fff; margin-bottom: .65rem; }
+    .map-desc { color: var(--text-dim); font-size: .875rem; line-height: 1.75; margin-bottom: 1.5rem; flex: 1; }
+    .map-desc strong { color: var(--text); font-weight: 500; }
+
+    .legend { display: flex; flex-wrap: wrap; gap: .6rem .9rem; margin-bottom: 1.75rem; }
+    .li { display: flex; align-items: center; gap: .4rem; font-family: var(--fm); font-size: .72rem; color: var(--text-dim); }
+    .sw { width: 22px; height: 5px; border-radius: 3px; }
+
+    .map-btn {
+      display: flex; align-items: center; justify-content: center; gap: .55rem;
+      padding: 1rem 1.25rem; border-radius: 5px;
+      text-decoration: none; font-family: var(--fm);
+      font-size: .8rem; letter-spacing: .1em; text-transform: uppercase; font-weight: 500;
+      transition: all .25s;
+    }
+    .map-btn-5 { background: rgba(26,152,80,.1);  color: var(--green); border: 1px solid rgba(26,152,80,.32); }
+    .map-btn-5:hover { background: rgba(26,152,80,.2);  box-shadow: 0 0 28px rgba(26,152,80,.22);  transform: translateY(-1px); }
+    .map-btn-3 { background: rgba(244,161,29,.1); color: var(--amber); border: 1px solid rgba(244,161,29,.32); }
+    .map-btn-3:hover { background: rgba(244,161,29,.2); box-shadow: 0 0 28px rgba(244,161,29,.22); transform: translateY(-1px); }
+
+    /* ── RESEARCH OUTPUTS ───────────────────────── */
+    .research-wrap {
+      border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+      background: linear-gradient(to bottom, var(--bg), var(--bg-2));
+    }
+
+    .doc-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+      margin-bottom: 1.25rem;
+    }
+    @media (max-width: 860px) { .doc-grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 520px) { .doc-grid { grid-template-columns: 1fr; } }
+
+    .tool-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+    @media (max-width: 520px) { .tool-grid { grid-template-columns: 1fr; } }
+
+    .doc-card {
+      background: var(--bg-3); border: 1px solid var(--border);
+      border-radius: 8px; padding: 1.5rem;
+      display: flex; flex-direction: column; gap: .75rem;
+      transition: border-color .25s, transform .25s;
+    }
+    .doc-card:hover { border-color: var(--border-hi); transform: translateY(-3px); }
+    .doc-card.soon { opacity: .55; }
+    .doc-card.soon:hover { transform: none; border-color: var(--border); }
+
+    .doc-icon {
+      width: 2.4rem; height: 2.4rem;
+      border-radius: 6px; display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .doc-icon svg { width: 1.25rem; height: 1.25rem; fill: none; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+    .doc-icon.pdf   { background: rgba(215,48,39,.12);   border: 1px solid rgba(215,48,39,.2);  }
+    .doc-icon.pdf svg  { stroke: #e05a4a; }
+    .doc-icon.slides { background: rgba(168,201,46,.12); border: 1px solid rgba(168,201,46,.2); }
+    .doc-icon.slides svg { stroke: var(--ygreen); }
+    .doc-icon.web   { background: rgba(26,152,80,.12);  border: 1px solid rgba(26,152,80,.2);  }
+    .doc-icon.web svg  { stroke: var(--green); }
+    .doc-icon.code  { background: rgba(244,161,29,.12); border: 1px solid rgba(244,161,29,.2); }
+    .doc-icon.code svg { stroke: var(--amber); }
+
+    .doc-stage {
+      font-family: var(--fm); font-size: .58rem; letter-spacing: .18em;
+      text-transform: uppercase; color: var(--text-muted);
+    }
+
+    .doc-title { font-family: var(--fb); font-size: .9rem; font-weight: 600; color: var(--text); }
+
+    .doc-desc { font-size: .8rem; color: var(--text-dim); line-height: 1.6; flex: 1; }
+
+    .doc-status {
+      display: inline-flex; align-items: center; gap: .35rem;
+      font-family: var(--fm); font-size: .62rem; letter-spacing: .1em;
+      text-transform: uppercase; padding: .2rem .55rem;
+      border-radius: 999px;
+    }
+    .status-available { background: rgba(26,152,80,.12); color: var(--green); border: 1px solid rgba(26,152,80,.25); }
+    .status-soon      { background: rgba(68,68,106,.2);  color: var(--text-muted); border: 1px solid var(--border-hi); }
+    .status-dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+
+    .doc-link {
+      display: inline-flex; align-items: center; gap: .4rem;
+      font-family: var(--fm); font-size: .72rem; letter-spacing: .06em;
+      color: var(--text-dim); text-decoration: none;
+      padding: .55rem .85rem; border-radius: 4px;
+      border: 1px solid var(--border-hi);
+      transition: all .2s; margin-top: auto;
+    }
+    .doc-link:hover { color: var(--text); border-color: var(--text-dim); }
+    .doc-link.green:hover  { color: var(--green);  border-color: rgba(26,152,80,.5); }
+    .doc-link.amber:hover  { color: var(--amber);  border-color: rgba(244,161,29,.5); }
+    .doc-link.red:hover    { color: #e05a4a;         border-color: rgba(215,48,39,.5); }
+    .doc-link.disabled { pointer-events: none; opacity: .4; }
+
+    /* Tool cards (wider) */
+    .tool-card {
+      background: var(--bg-3); border: 1px solid var(--border);
+      border-radius: 8px; padding: 1.5rem 1.75rem;
+      display: flex; align-items: center; gap: 1.25rem;
+      transition: border-color .25s, transform .25s;
+      text-decoration: none; color: inherit;
+    }
+    .tool-card:hover { transform: translateY(-3px); }
+    .tool-card.tc-annotate:hover { border-color: rgba(26,152,80,.4); }
+    .tool-card.tc-github:hover   { border-color: rgba(244,161,29,.4); }
+
+    .tool-icon {
+      width: 3rem; height: 3rem; border-radius: 8px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .tool-icon svg { width: 1.4rem; height: 1.4rem; fill: none; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+    .ti-annotate { background: rgba(26,152,80,.12);  border: 1px solid rgba(26,152,80,.2);  }
+    .ti-annotate svg { stroke: var(--green); }
+    .ti-github   { background: rgba(244,161,29,.12); border: 1px solid rgba(244,161,29,.2); }
+    .ti-github svg   { stroke: var(--amber); }
+
+    .tool-text { flex: 1; }
+    .tool-label { font-family: var(--fm); font-size: .6rem; letter-spacing: .2em; text-transform: uppercase; color: var(--text-muted); margin-bottom: .25rem; }
+    .tool-name  { font-family: var(--fb); font-size: .95rem; font-weight: 600; color: var(--text); margin-bottom: .25rem; }
+    .tool-desc  { font-size: .8rem; color: var(--text-dim); }
+
+    .tool-arrow { color: var(--text-muted); transition: color .2s, transform .2s; }
+    .tool-card:hover .tool-arrow { color: var(--text); transform: translateX(4px); }
+
+    /* ── PIPELINE ───────────────────────────────── */
+    .pipeline-section { position: relative; z-index: 1; }
+    .pipeline { display: grid; grid-template-columns: repeat(6, 1fr); position: relative; }
+    @media (max-width: 860px) { .pipeline { grid-template-columns: repeat(3, 1fr); } }
+    @media (max-width: 480px) { .pipeline { grid-template-columns: repeat(2, 1fr); } }
+
+    .pipeline::before {
+      content: ''; position: absolute;
+      top: 2.35rem; left: calc(100%/12); right: calc(100%/12);
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--border-hi) 8%, var(--border-hi) 92%, transparent);
+    }
+    @media (max-width: 860px) { .pipeline::before { display: none; } }
+
+    .step { display: flex; flex-direction: column; align-items: center; text-align: center; padding: .75rem .5rem 1.25rem; }
+    .step-icon {
+      width: 4.75rem; height: 4.75rem; border-radius: 50%;
+      background: var(--bg-3); border: 1px solid var(--border-hi);
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 1rem; position: relative; z-index: 1;
+      transition: border-color .3s, box-shadow .3s;
+    }
+    .step-icon svg { width: 1.45rem; height: 1.45rem; stroke: var(--ygreen); fill: none; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+    .step:hover .step-icon { border-color: rgba(168,201,46,.6); box-shadow: 0 0 22px rgba(168,201,46,.18); }
+    .step-num  { font-family: var(--fm); font-size: .58rem; color: var(--ygreen); letter-spacing: .12em; margin-bottom: .2rem; }
+    .step-name { font-family: var(--fb); font-size: .8rem; font-weight: 500; color: var(--text); margin-bottom: .3rem; }
+    .step-sub  { font-family: var(--fm); font-size: .62rem; color: var(--text-muted); line-height: 1.5; }
+
+    /* ── TECH STACK ─────────────────────────────── */
+    .tech-wrap { border-top: 1px solid var(--border); padding: 3.5rem 2rem; }
+    .tech-inner { max-width: 1180px; margin: 0 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 1.5rem 2.5rem; }
+    .tech-label { font-family: var(--fm); font-size: .68rem; letter-spacing: .25em; text-transform: uppercase; color: var(--text-muted); white-space: nowrap; }
+    .pills { display: flex; flex-wrap: wrap; gap: .45rem; }
+    .pill { padding: .3rem .85rem; border: 1px solid var(--border-hi); border-radius: 999px; font-family: var(--fm); font-size: .72rem; color: var(--text-dim); transition: border-color .2s, color .2s; cursor: default; }
+    .pill:hover { border-color: var(--ygreen); color: var(--ygreen); }
+
+    /* ── FOOTER ─────────────────────────────────── */
+    .footer-wrap { border-top: 1px solid var(--border); }
+    footer { max-width: 1180px; margin: 0 auto; padding: 1.75rem 2rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .75rem; }
+    .footer-by  { font-family: var(--fm); font-size: .82rem; color: var(--text-dim); }
+    .footer-by strong { color: var(--text); }
+    .footer-tag { font-family: var(--fm); font-size: .68rem; color: var(--text-muted); letter-spacing: .06em; }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════ HERO -->
+<section class="hero">
+  <div class="glow glow-1"></div>
+  <div class="glow glow-2"></div>
+  <div class="glow glow-3"></div>
+
+  <p class="eyebrow">BITS Pilani &nbsp;·&nbsp; M.Tech Software Engineering &nbsp;·&nbsp; SEZG628T</p>
+
+  <h1 class="hero-title">ROAD<br>QUALITY<br>MAP</h1>
+
+  <div class="quality-bar">
+    <span></span><span></span><span></span><span></span>
+  </div>
+
+  <p class="hero-tagline">
+    Every road segment, scored by AI. Dashcam footage transformed into a live map of road conditions using computer vision and deep learning.
+  </p>
+  <p class="hero-dissertation">"Road Quality Assessment System Using Computer Vision and GPS-Based Mapping"</p>
+  <p class="hero-meta"><strong>Anish Anilkumar</strong> &nbsp;·&nbsp; 2024TM93051 &nbsp;·&nbsp; M.Tech Software Engineering</p>
+  <p class="hero-meta" style="margin-top:-.5rem;">Supervisor: <a href="https://www.linkedin.com/in/kavya-manohar/" target="_blank" rel="noopener"><strong>Dr. Kavya Manohar</strong></a> &nbsp;·&nbsp; Additional Examiner: <a href="https://www.linkedin.com/in/aashiks/" target="_blank" rel="noopener"><strong>Mr. Ashik Salahudeen</strong></a> &nbsp;·&nbsp; BITS Evaluator: <a href="https://www.bits-pilani.ac.in/pilani/eht-e-sham/" target="_blank" rel="noopener"><strong>Dr. Eht E Sham</strong></a></p>
+
+  <div class="hero-actions">
+    <a href="#maps" class="btn btn-solid">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
+      Explore the Maps
+    </a>
+    <a href="#research" class="btn btn-ghost">Research Output ↓</a>
+  </div>
+
+  <div class="scroll-cue">
+    <svg width="11" height="19" viewBox="0 0 11 19" fill="none" stroke="currentColor" stroke-width="1.4"><rect x=".7" y=".7" width="9.6" height="17.6" rx="4.8"/><circle cx="5.5" cy="5.5" r="1.5" fill="currentColor" stroke="none"/></svg>
+    SCROLL
+  </div>
+</section>
+
+<!-- ═══════════════════════════════ MAP CARDS -->
+<div class="maps-wrap" id="maps">
+  <div class="section">
+    <div class="section-label">Interactive Maps</div>
+    <h2 class="section-title">EXPLORE THE DATA</h2>
+    <p class="section-desc">Two AI models, two levels of granularity. Click any road segment to see observation counts, confidence scores, and raw label breakdowns.</p>
+
+    <div class="maps-grid">
+
+      <!-- ── 5-CLASS (first) ── -->
+      <div class="map-card card-5">
+        <div class="preview">
+          <svg viewBox="0 0 600 190" preserveAspectRatio="xMidYMid slice">
+            <defs>
+              <filter id="g5" x="-30%" y="-30%" width="160%" height="160%">
+                <feGaussianBlur stdDeviation="4" result="b"/>
+                <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+              </filter>
+            </defs>
+
+            <!-- dim base grid -->
+            <line x1="0"   y1="35"  x2="600" y2="35"  stroke="#161630" stroke-width="5"/>
+            <line x1="0"   y1="95"  x2="600" y2="95"  stroke="#161630" stroke-width="9"/>
+            <line x1="0"   y1="155" x2="600" y2="155" stroke="#161630" stroke-width="5"/>
+            <line x1="150" y1="0"   x2="150" y2="190" stroke="#161630" stroke-width="6"/>
+            <line x1="300" y1="0"   x2="300" y2="190" stroke="#161630" stroke-width="6"/>
+            <line x1="450" y1="0"   x2="450" y2="190" stroke="#161630" stroke-width="5"/>
+
+            <!-- Bottom road y=155: all poor/fair (the bad route) -->
+            <line x1="0"   y1="155" x2="300" y2="155" stroke="#d73027" stroke-width="4" filter="url(#g5)" opacity=".75"/>
+            <line x1="300" y1="155" x2="600" y2="155" stroke="#f4a11d" stroke-width="4" filter="url(#g5)" opacity=".75"/>
+
+            <!-- Main road y=95: left section poor, right section good -->
+            <line x1="0"   y1="95"  x2="150" y2="95"  stroke="#d73027" stroke-width="7" filter="url(#g5)" opacity=".8"/>
+            <line x1="150" y1="95"  x2="300" y2="95"  stroke="#f4a11d" stroke-width="7" filter="url(#g5)" opacity=".8"/>
+            <line x1="300" y1="95"  x2="450" y2="95"  stroke="#a8c92e" stroke-width="7" filter="url(#g5)" opacity=".88"/>
+            <line x1="450" y1="95"  x2="600" y2="95"  stroke="#1a9850" stroke-width="7" filter="url(#g5)" opacity=".88"/>
+
+            <!-- Top road y=35: green all the way — the smart route -->
+            <line x1="0"   y1="35"  x2="300" y2="35"  stroke="#1a9850" stroke-width="5" filter="url(#g5)" opacity=".88"/>
+            <line x1="300" y1="35"  x2="600" y2="35"  stroke="#a8c92e" stroke-width="5" filter="url(#g5)" opacity=".88"/>
+
+            <!-- Verticals: x=150 (bad connector), x=300 (green connector — smart turn) -->
+            <line x1="150" y1="35"  x2="150" y2="95"  stroke="#d73027" stroke-width="5" filter="url(#g5)" opacity=".7"/>
+            <line x1="150" y1="95"  x2="150" y2="155" stroke="#d73027" stroke-width="5" filter="url(#g5)" opacity=".7"/>
+            <line x1="300" y1="0"   x2="300" y2="35"  stroke="#1a9850" stroke-width="5" filter="url(#g5)" opacity=".88"/>
+            <line x1="300" y1="35"  x2="300" y2="95"  stroke="#1a9850" stroke-width="5" filter="url(#g5)" opacity=".88"/>
+            <line x1="300" y1="95"  x2="300" y2="155" stroke="#f4a11d" stroke-width="5" filter="url(#g5)" opacity=".7"/>
+            <line x1="450" y1="95"  x2="450" y2="155" stroke="#d73027" stroke-width="5" filter="url(#g5)" opacity=".7"/>
+
+            <!-- Smart route dashed overlay: top-left → turn down at x=300 → right along good road -->
+            <path d="M0,35 L300,35 L300,95 L600,95"
+                  stroke="#1a9850" stroke-width="2.5" stroke-dasharray="7,5"
+                  fill="none" opacity=".5"/>
+
+            <!-- Animated dot navigating via green roads -->
+            <circle r="7" fill="#1a9850" filter="url(#g5)" opacity=".95">
+              <animateMotion dur="5s" repeatCount="indefinite" calcMode="linear">
+                <mpath href="#route5"/>
+              </animateMotion>
+            </circle>
+            <!-- Smaller trailing glow -->
+            <circle r="3.5" fill="#a8c92e" opacity=".7">
+              <animateMotion dur="5s" repeatCount="indefinite" calcMode="linear" begin="0.18s">
+                <mpath href="#route5"/>
+              </animateMotion>
+            </circle>
+
+            <path id="route5" d="M0,35 L300,35 L300,95 L600,95" fill="none"/>
+          </svg>
+        </div>
+        <div class="map-body">
+          <span class="map-badge badge-5">5-Class Model</span>
+          <h3 class="map-name">FULL SPECTRUM</h3>
+          <p class="map-desc">
+            Fine-grained classification across five conditions: <strong>Excellent → Good → Fair → Poor</strong>. Trained via active learning on thousands of manually-reviewed dashcam frames. Reveals the full gradient of road degradation.
+          </p>
+          <div class="legend">
+            <div class="li"><div class="sw" style="background:var(--red)"></div>Poor</div>
+            <div class="li"><div class="sw" style="background:var(--amber)"></div>Fair</div>
+            <div class="li"><div class="sw" style="background:var(--ygreen)"></div>Good</div>
+            <div class="li"><div class="sw" style="background:var(--green)"></div>Excellent</div>
+            <div class="li"><div class="sw" style="background:#44446a"></div>Invalid</div>
+          </div>
+          <a href="map_5class.html" target="_blank" rel="noopener" class="map-btn map-btn-5">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
+            Open 5-Class Map
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+          </a>
+        </div>
+      </div>
+
+      <!-- ── 3-CLASS (second) ── -->
+      <div class="map-card card-3">
+        <div class="preview">
+          <svg viewBox="0 0 600 190" preserveAspectRatio="xMidYMid slice">
+            <defs>
+              <filter id="g3" x="-30%" y="-30%" width="160%" height="160%">
+                <feGaussianBlur stdDeviation="4" result="b"/>
+                <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+              </filter>
+            </defs>
+
+            <!-- dim base grid -->
+            <line x1="0"   y1="40"  x2="600" y2="40"  stroke="#161630" stroke-width="5"/>
+            <line x1="0"   y1="95"  x2="600" y2="95"  stroke="#161630" stroke-width="9"/>
+            <line x1="0"   y1="155" x2="600" y2="155" stroke="#161630" stroke-width="5"/>
+            <line x1="180" y1="0"   x2="180" y2="190" stroke="#161630" stroke-width="6"/>
+            <line x1="360" y1="0"   x2="360" y2="190" stroke="#161630" stroke-width="6"/>
+            <line x1="500" y1="0"   x2="500" y2="190" stroke="#161630" stroke-width="5"/>
+
+            <!-- Bottom road y=155: bad (red) throughout -->
+            <line x1="0"   y1="155" x2="600" y2="155" stroke="#d73027" stroke-width="4" filter="url(#g3)" opacity=".75"/>
+
+            <!-- Main road y=95: left portion bad, right portion good -->
+            <line x1="0"   y1="95"  x2="180" y2="95"  stroke="#d73027" stroke-width="7" filter="url(#g3)" opacity=".8"/>
+            <line x1="180" y1="95"  x2="360" y2="95"  stroke="#d73027" stroke-width="7" filter="url(#g3)" opacity=".8"/>
+            <line x1="360" y1="95"  x2="500" y2="95"  stroke="#a8c92e" stroke-width="7" filter="url(#g3)" opacity=".88"/>
+            <line x1="500" y1="95"  x2="600" y2="95"  stroke="#a8c92e" stroke-width="7" filter="url(#g3)" opacity=".88"/>
+
+            <!-- Top road y=40: all Good (smart bypass) -->
+            <line x1="0"   y1="40"  x2="360" y2="40"  stroke="#a8c92e" stroke-width="5" filter="url(#g3)" opacity=".88"/>
+            <line x1="360" y1="40"  x2="600" y2="40"  stroke="#a8c92e" stroke-width="5" filter="url(#g3)" opacity=".78"/>
+
+            <!-- Verticals -->
+            <line x1="180" y1="40"  x2="180" y2="95"  stroke="#d73027" stroke-width="5" filter="url(#g3)" opacity=".7"/>
+            <line x1="180" y1="95"  x2="180" y2="155" stroke="#d73027" stroke-width="5" filter="url(#g3)" opacity=".7"/>
+            <!-- Smart turn at x=360 -->
+            <line x1="360" y1="0"   x2="360" y2="40"  stroke="#a8c92e" stroke-width="5" filter="url(#g3)" opacity=".88"/>
+            <line x1="360" y1="40"  x2="360" y2="95"  stroke="#a8c92e" stroke-width="5" filter="url(#g3)" opacity=".88"/>
+            <line x1="360" y1="95"  x2="360" y2="155" stroke="#d73027" stroke-width="5" filter="url(#g3)" opacity=".7"/>
+            <line x1="500" y1="95"  x2="500" y2="155" stroke="#d73027" stroke-width="5" filter="url(#g3)" opacity=".6"/>
+
+            <!-- Smart route dashed overlay: top road → turn at x=360 → right on good road -->
+            <path d="M0,40 L360,40 L360,95 L600,95"
+                  stroke="#a8c92e" stroke-width="2.5" stroke-dasharray="7,5"
+                  fill="none" opacity=".5"/>
+
+            <!-- Animated dot navigating via good roads -->
+            <circle r="7" fill="#a8c92e" filter="url(#g3)" opacity=".95">
+              <animateMotion dur="5s" repeatCount="indefinite" calcMode="linear" begin="0.5s">
+                <mpath href="#route3"/>
+              </animateMotion>
+            </circle>
+            <circle r="3.5" fill="#1a9850" opacity=".7">
+              <animateMotion dur="5s" repeatCount="indefinite" calcMode="linear" begin="0.68s">
+                <mpath href="#route3"/>
+              </animateMotion>
+            </circle>
+
+            <path id="route3" d="M0,40 L360,40 L360,95 L600,95" fill="none"/>
+          </svg>
+        </div>
+        <div class="map-body">
+          <span class="map-badge badge-3">3-Class Model</span>
+          <h3 class="map-name">BINARY SPLIT</h3>
+          <p class="map-desc">
+            High-confidence classification into <strong>Good</strong> and <strong>Bad</strong> roads. When the model is uncertain, it withholds judgement. Ideal for quick infrastructure triage — a clear red/green picture of what needs urgent attention.
+          </p>
+          <div class="legend">
+            <div class="li"><div class="sw" style="background:var(--red)"></div>Bad</div>
+            <div class="li"><div class="sw" style="background:var(--ygreen)"></div>Good</div>
+            <div class="li"><div class="sw" style="background:#44446a"></div>Invalid</div>
+          </div>
+          <a href="map_3class.html" target="_blank" rel="noopener" class="map-btn map-btn-3">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
+            Open 3-Class Map
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+          </a>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ RESEARCH OUTPUT -->
+<div class="research-wrap" id="research">
+  <div class="section">
+    <div class="section-label">Academic Research</div>
+    <h2 class="section-title">RESEARCH OUTPUT</h2>
+    <p class="section-desc">Reports and presentations from each stage of the M.Tech thesis, from initial outline through to the final submission.</p>
+
+    <!-- Documents grid (6 items × 3 cols) -->
+    <div class="doc-grid">
+
+      <!-- Abstract Report -->
+      <div class="doc-card">
+        <div class="doc-icon pdf">
+          <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        </div>
+        <div class="doc-stage">Abstract / Outline</div>
+        <div class="doc-title">Project Outline Report</div>
+        <div class="doc-desc">Initial research proposal defining the problem scope, objectives, and methodology for AI-powered road quality assessment.</div>
+        <span class="doc-status status-available"><span class="status-dot"></span>Available</span>
+        <a href="abstract_outline_report.pdf" target="_blank" rel="noopener" class="doc-link red">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+          Open PDF
+        </a>
+      </div>
+
+      <!-- Abstract Slides -->
+      <div class="doc-card">
+        <div class="doc-icon slides">
+          <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+        </div>
+        <div class="doc-stage">Abstract / Outline</div>
+        <div class="doc-title">Outline Presentation</div>
+        <div class="doc-desc">Slide deck presented for the abstract review stage, covering project motivation, pipeline design, and anticipated contributions.</div>
+        <span class="doc-status status-available"><span class="status-dot"></span>Available</span>
+        <a href="abstract_outline_presentation.pdf" target="_blank" rel="noopener" class="doc-link">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+          Open PDF
+        </a>
+      </div>
+
+      <!-- Mid-Semester Report -->
+      <div class="doc-card">
+        <div class="doc-icon pdf">
+          <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        </div>
+        <div class="doc-stage">Mid-Semester</div>
+        <div class="doc-title">Mid-Semester Report</div>
+        <div class="doc-desc">Progress report covering the completed data pipeline, model architecture sweep across 15 backbones, and hyperparameter tuning results (72 trials).</div>
+        <span class="doc-status status-available"><span class="status-dot"></span>Available</span>
+        <a href="mid_semester_report.pdf" target="_blank" rel="noopener" class="doc-link red">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+          Open PDF
+        </a>
+      </div>
+
+      <!-- Mid-Semester Slides -->
+      <div class="doc-card">
+        <div class="doc-icon web">
+          <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+        </div>
+        <div class="doc-stage">Mid-Semester</div>
+        <div class="doc-title">Mid-Semester Presentation</div>
+        <div class="doc-desc">Interactive HTML slide deck for the mid-semester review, with model comparison tables and live map demonstration.</div>
+        <span class="doc-status status-available"><span class="status-dot"></span>Available</span>
+        <a href="midsemester_presentation/index.html" target="_blank" rel="noopener" class="doc-link green">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+          Open Slides
+        </a>
+      </div>
+
+      <!-- Final Report — coming soon -->
+      <div class="doc-card soon">
+        <div class="doc-icon pdf">
+          <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        </div>
+        <div class="doc-stage">Final</div>
+        <div class="doc-title">Final Report</div>
+        <div class="doc-desc">Complete thesis document with full experimental results, ablation studies, and conclusions.</div>
+        <span class="doc-status status-soon"><span class="status-dot"></span>Coming Soon</span>
+        <a href="#" class="doc-link disabled">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          Not yet available
+        </a>
+      </div>
+
+      <!-- Final Slides — coming soon -->
+      <div class="doc-card soon">
+        <div class="doc-icon slides">
+          <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+        </div>
+        <div class="doc-stage">Final</div>
+        <div class="doc-title">Final Presentation</div>
+        <div class="doc-desc">Thesis defence presentation summarising the end-to-end pipeline, model performance, and road quality mapping outcomes.</div>
+        <span class="doc-status status-soon"><span class="status-dot"></span>Coming Soon</span>
+        <a href="#" class="doc-link disabled">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          Not yet available
+        </a>
+      </div>
+
+      <!-- Trained Model — coming soon -->
+      <div class="doc-card soon">
+        <div class="doc-icon code">
+          <svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="2" x2="9" y2="4"/><line x1="15" y1="2" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="22"/><line x1="15" y1="20" x2="15" y2="22"/><line x1="20" y1="9" x2="22" y2="9"/><line x1="20" y1="14" x2="22" y2="14"/><line x1="2" y1="9" x2="4" y2="9"/><line x1="2" y1="14" x2="4" y2="14"/></svg>
+        </div>
+        <div class="doc-stage">Research Artifact</div>
+        <div class="doc-title">Trained Classifier Model</div>
+        <div class="doc-desc">Pre-trained Swin Transformer weights for both 5-class and 3-class road quality classification, ready for inference.</div>
+        <span class="doc-status status-soon"><span class="status-dot"></span>Coming Soon</span>
+        <a href="#" class="doc-link disabled">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          Not yet available
+        </a>
+      </div>
+
+      <!-- Dataset — coming soon -->
+      <div class="doc-card soon">
+        <div class="doc-icon web">
+          <svg viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+        </div>
+        <div class="doc-stage">Research Artifact</div>
+        <div class="doc-title">Annotated Road Dataset</div>
+        <div class="doc-desc">Crowd-sourced road condition classifications across thousands of dashcam frames, labelled by human annotators across 4 cameras.</div>
+        <span class="doc-status status-soon"><span class="status-dot"></span>Coming Soon</span>
+        <a href="#" class="doc-link disabled">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          Not yet available
+        </a>
+      </div>
+
+    </div>
+
+    <!-- Tools row -->
+    <div class="tool-grid">
+
+      <a href="https://annotate.anishsheela.com/" target="_blank" rel="noopener" class="tool-card tc-annotate">
+        <div class="tool-icon ti-annotate">
+          <svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+        </div>
+        <div class="tool-text">
+          <div class="tool-label">Live Tool</div>
+          <div class="tool-name">Crowd-Source Annotation Platform</div>
+          <div class="tool-desc">The collaborative, gamified road image labelling app built to generate training data for this project — open to contributors.</div>
+        </div>
+        <svg class="tool-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+      </a>
+
+      <a href="https://github.com/anishsheela/potholes" target="_blank" rel="noopener" class="tool-card tc-github">
+        <div class="tool-icon ti-github">
+          <svg viewBox="0 0 24 24"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 00-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0020 4.77 5.07 5.07 0 0019.91 1S18.73.65 16 2.48a13.38 13.38 0 00-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 005 4.77a5.44 5.44 0 00-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 009 18.13V22"/></svg>
+        </div>
+        <div class="tool-text">
+          <div class="tool-label">Open Source</div>
+          <div class="tool-name">Source Code</div>
+          <div class="tool-desc">Full pipeline source — frame extraction, OCR, active learning classifier, YOLO pothole detector, and map renderer.</div>
+        </div>
+        <svg class="tool-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+      </a>
+
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ PIPELINE -->
+<div class="pipeline-section" id="pipeline">
+  <div class="section">
+    <div class="section-label">Methodology</div>
+    <h2 class="section-title">HOW IT WORKS</h2>
+    <p class="section-desc">A fully automated pipeline — from raw dashcam footage to a published, GPS-accurate road quality map.</p>
+
+    <div class="pipeline">
+      <div class="step">
+        <div class="step-icon"><svg viewBox="0 0 24 24"><rect x="2" y="6" width="13" height="12" rx="2"/><path d="M15 10l6-4v12l-6-4"/></svg></div>
+        <div class="step-num">01</div><div class="step-name">Dashcam Video</div>
+        <div class="step-sub">Raw MP4<br>multi-contributor</div>
+      </div>
+      <div class="step">
+        <div class="step-icon"><svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="2"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="17" y1="7" x2="22" y2="7"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="2" y1="17" x2="7" y2="17"/></svg></div>
+        <div class="step-num">02</div><div class="step-name">Frame Extraction</div>
+        <div class="step-sub">1 fps via FFmpeg<br>hw accelerated</div>
+      </div>
+      <div class="step">
+        <div class="step-icon"><svg viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 012-2h2"/><path d="M17 3h2a2 2 0 012 2v2"/><path d="M21 17v2a2 2 0 01-2 2h-2"/><path d="M7 21H5a2 2 0 01-2-2v-2"/><line x1="8" y1="8" x2="16" y2="8"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="16" x2="12" y2="16"/></svg></div>
+        <div class="step-num">03</div><div class="step-name">OCR Telemetry</div>
+        <div class="step-sub">GPS · speed · time<br>Tesseract OCR</div>
+      </div>
+      <div class="step">
+        <div class="step-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="3"/><circle cx="4" cy="17" r="2"/><circle cx="20" cy="17" r="2"/><circle cx="9" cy="21" r="2"/><circle cx="15" cy="21" r="2"/><line x1="12" y1="8" x2="4" y2="15"/><line x1="12" y1="8" x2="20" y2="15"/><line x1="4" y1="19" x2="9" y2="19"/><line x1="20" y1="19" x2="15" y2="19"/></svg></div>
+        <div class="step-num">04</div><div class="step-name">AI Classification</div>
+        <div class="step-sub">Swin Transformer<br>active learning</div>
+      </div>
+      <div class="step">
+        <div class="step-icon"><svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg></div>
+        <div class="step-num">05</div><div class="step-name">GPS Snap</div>
+        <div class="step-sub">OpenStreetMap<br>segment snap</div>
+      </div>
+      <div class="step">
+        <div class="step-icon"><svg viewBox="0 0 24 24"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg></div>
+        <div class="step-num">06</div><div class="step-name">Interactive Map</div>
+        <div class="step-sub">Folium · colour-coded<br>road quality</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ TECH STACK -->
+<div class="tech-wrap">
+  <div class="tech-inner">
+    <span class="tech-label">Built with</span>
+    <div class="pills">
+      <span class="pill">Python</span>
+      <span class="pill">PyTorch</span>
+      <span class="pill">Swin Transformer</span>
+      <span class="pill">YOLOv8</span>
+      <span class="pill">Tesseract OCR</span>
+      <span class="pill">OpenStreetMap</span>
+      <span class="pill">Folium</span>
+      <span class="pill">osmnx</span>
+      <span class="pill">FFmpeg</span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ FOOTER -->
+<div class="footer-wrap">
+  <footer>
+    <div class="footer-by">By <strong>Anish Anilkumar</strong> &nbsp;·&nbsp; 2024TM93051</div>
+    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:.3rem;">
+      <div class="footer-tag">SEZG628T Dissertation &nbsp;·&nbsp; M.Tech Software Engineering &nbsp;·&nbsp; BITS Pilani &nbsp;·&nbsp; 2026</div>
+      <div class="footer-tag">Supervisor: <a href="https://www.linkedin.com/in/kavya-manohar/" target="_blank" rel="noopener">Dr. Kavya Manohar</a> &nbsp;·&nbsp; Additional Examiner: <a href="https://www.linkedin.com/in/aashiks/" target="_blank" rel="noopener">Mr. Ashik Salahudeen</a> &nbsp;·&nbsp; BITS Evaluator: <a href="https://www.bits-pilani.ac.in/pilani/eht-e-sham/" target="_blank" rel="noopener">Dr. Eht E Sham</a></div>
+    </div>
+  </footer>
+</div>
+
+</body>
+</html>
