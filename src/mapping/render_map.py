@@ -230,7 +230,7 @@ def parse_args():
                         default='processed_data/mapping/road_quality_map.html',
                         help='Output HTML file path')
     parser.add_argument('--default-layer', type=str,
-                        default='pessimistic',
+                        default='majority',
                         choices=['pessimistic', 'majority'],
                         help='Which quality layer is visible on load')
     parser.add_argument('--min-obs', type=int, default=1,
@@ -302,15 +302,15 @@ def main():
     ).add_to(m)
 
     # Dynamic legend — only labels present in this dataset
-    present_labels = gdf['quality_pessimistic'].unique().tolist()
+    present_labels = gdf['quality_majority'].unique().tolist()
     m.get_root().html.add_child(folium.Element(build_legend_html(present_labels)))
 
     # ── Summary stats in map title ────────────────────────────────────────────
     total = len(gdf)
-    pess_counts = gdf['quality_pessimistic'].value_counts()
+    maj_counts = gdf['quality_majority'].value_counts()
     stats_lines = ' &nbsp;|&nbsp; '.join(
         f'<span style="color:{quality_colour(lbl)};font-weight:bold;">'
-        f'{lbl}</span> {pess_counts.get(lbl, 0):,}'
+        f'{lbl}</span> {maj_counts.get(lbl, 0):,}'
         for lbl in LABEL_ORDER
         if lbl in present_labels
     )
@@ -335,10 +335,10 @@ def main():
     print(f'Map saved to {args.output}')
     print(f'{"="*55}')
     print(f'  Total road segments : {total:,}')
-    print(f'\nQuality breakdown (pessimistic):')
+    print(f'\nQuality breakdown (majority):')
     for lbl in LABEL_ORDER:
         if lbl in present_labels:
-            n = pess_counts.get(lbl, 0)
+            n = maj_counts.get(lbl, 0)
             pct = 100 * n / max(total, 1)
             print(f'  {lbl:<12} {n:>5,}  ({pct:.1f}%)')
     print(f'\nOpen in a browser: {os.path.abspath(args.output)}')
