@@ -250,24 +250,31 @@ def get_stats():
         img_classifications[img][u] = label
         
     consensus_count = 0
+    consensus_images = set()
     for img, user_dict in img_classifications.items():
         labels = list(user_dict.values())
         for l in set(labels):
             if labels.count(l) >= 2:
                 consensus_count += 1
+                consensus_images.add(img)
                 break
-                
+
+    on_disk_images = set(all_images)
+    annotated_and_on_disk = len(consensus_images & on_disk_images)
+    # True total = already annotated (including deleted from disk) + remaining on disk not yet annotated
+    true_total = consensus_count + (total_images - annotated_and_on_disk)
+
     active_users = 0
     c.execute('SELECT COUNT(*) FROM active_sessions WHERE current_image IS NOT NULL')
     row = c.fetchone()
     if row: active_users = row[0]
     conn.close()
-    
+
     return {
-        'total_images': total_images,
+        'total_images': true_total,
         'classified': consensus_count,
-        'remaining': total_images - consensus_count,
-        'progress_percent': round((consensus_count / total_images * 100) if total_images > 0 else 0, 1),
+        'remaining': true_total - consensus_count,
+        'progress_percent': round((consensus_count / true_total * 100) if true_total > 0 else 0, 1),
         'active_users': active_users
     }
 
@@ -469,6 +476,7 @@ HTML_TEMPLATE = """
             <h2>🙏 Thank You to Our Collaborators</h2>
             <p>This project wouldn't have been possible without your time and careful judgement. Every label you submitted has directly contributed to training an AI model that assesses real road conditions.</p>
             <p class="signature">Your work is now part of my research. Thank you from the bottom of my heart &mdash; Anish Anilkumar</p>
+            <a href="https://roads.anishsheela.com/" target="_blank" rel="noopener" style="display:inline-block; margin-bottom: 18px; background: rgba(255,255,255,0.9); color: #d35400; font-weight: 700; font-size: 1rem; padding: 10px 24px; border-radius: 25px; text-decoration: none; box-shadow: 0 2px 10px rgba(0,0,0,0.15); transition: background 0.2s;" onmouseover="this.style.background='#fff'" onmouseout="this.style.background='rgba(255,255,255,0.9)'">🗺️ View the Research &amp; Live Map &rarr; roads.anishsheela.com</a>
             <div class="contributors" id="contributors-list">
                 <div class="contributor-card" style="color:rgba(255,255,255,0.7); font-size:0.9rem;">Loading...</div>
             </div>
