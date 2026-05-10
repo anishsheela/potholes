@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Quality Navigation</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; overflow: hidden; }
+
+    #map { position: fixed; inset: 0; top: 92px; z-index: 0; }
+
+    /* ── Top bar (two rows) ── */
+    #topbar {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+      background: white; border-bottom: 1px solid #e0e0e0;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+    }
+    #topbar-row1 {
+      display: flex; align-items: center; gap: 8px;
+      padding: 0 14px; height: 46px;
+      border-bottom: 1px solid #f0f0f0;
+    }
+    #topbar-title { font-size: 14px; font-weight: 600; margin-right: auto; white-space: nowrap; }
+    #status { font-size: 12px; color: #777; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
+
+    #topbar-row2 {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 14px; height: 46px;
+    }
+
+    /* ── Search inputs ── */
+    .search-wrap { position: relative; flex: 1; }
+    .search-box {
+      display: flex; align-items: center;
+      border: 1.5px solid #ddd; border-radius: 8px;
+      background: #fafafa; padding: 0 8px; height: 32px;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .search-box:focus-within {
+      border-color: #1a6fa8; box-shadow: 0 0 0 3px rgba(26,111,168,0.12);
+      background: white;
+    }
+    .search-dot {
+      width: 10px; height: 10px; border-radius: 50%;
+      flex-shrink: 0; margin-right: 7px;
+    }
+    .search-input {
+      flex: 1; border: none; background: transparent;
+      font-size: 12px; outline: none; color: #333;
+      min-width: 0;
+    }
+    .search-input::placeholder { color: #aaa; }
+    .search-clear {
+      background: none; border: none; cursor: pointer;
+      color: #bbb; font-size: 14px; padding: 0 2px; line-height: 1;
+      display: none;
+    }
+    .search-clear:hover { color: #666; }
+    .search-clear.visible { display: block; }
+
+    /* ── Dropdown ── */
+    .dropdown {
+      display: none; position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+      background: white; border: 1px solid #e0e0e0; border-radius: 8px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.15); z-index: 9999;
+      overflow: hidden; max-height: 240px; overflow-y: auto;
+    }
+    .dd-item {
+      padding: 9px 12px; cursor: pointer; border-bottom: 1px solid #f5f5f5;
+      transition: background 0.1s;
+    }
+    .dd-item:last-child { border-bottom: none; }
+    .dd-item:hover { background: #f0f6ff; }
+    .dd-name { font-size: 12px; font-weight: 500; color: #222; }
+    .dd-detail { font-size: 11px; color: #888; margin-top: 2px;
+                 white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .dd-empty { font-size: 12px; color: #999; font-style: italic; cursor: default; }
+    .dd-searching { font-size: 12px; color: #aaa; font-style: italic; cursor: default; }
+
+    /* ── Buttons ── */
+    .btn {
+      border: 1px solid transparent; border-radius: 6px;
+      padding: 6px 12px; font-size: 12px; font-weight: 500;
+      cursor: pointer; white-space: nowrap; transition: all 0.15s; line-height: 1;
+    }
+    .btn-ghost { background: #f5f5f5; color: #444; border-color: #ddd; }
+    .btn-ghost:hover { background: #e8e8e8; }
+    .btn-purple { background: #7d3c98; color: white; border-color: #7d3c98; }
+    .btn-purple:hover { background: #6c2e82; }
+    .btn-red { background: #f5f5f5; color: #c0392b; border-color: #ddd; }
+    .btn-red:hover { background: #fdeaea; border-color: #c0392b; }
+
+    /* ── Instruction pill ── */
+    #instruction {
+      position: fixed; top: 106px; left: 50%; transform: translateX(-50%);
+      z-index: 900; background: white; border-radius: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+      padding: 7px 18px; font-size: 12px; color: #555;
+      pointer-events: none; white-space: nowrap;
+    }
+
+    /* ── Legend ── */
+    #legend {
+      position: fixed; bottom: 20px; left: 12px; z-index: 900;
+      background: white; border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.18);
+      padding: 12px 14px; font-size: 12px; line-height: 1;
+    }
+    #legend h4 { font-size: 11px; font-weight: 700; text-transform: uppercase;
+                 letter-spacing: 0.05em; color: #888; margin-bottom: 8px; }
+    .leg-row { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
+    .leg-swatch { width: 24px; height: 5px; border-radius: 3px; flex-shrink: 0; }
+    .leg-dashed {
+      width: 24px; height: 3px; flex-shrink: 0;
+      background: repeating-linear-gradient(90deg,
+        #2471a3 0, #2471a3 6px, transparent 6px, transparent 11px);
+    }
+    .leg-label { font-size: 12px; color: #333; }
+    .leg-divider { border: none; border-top: 1px solid #eee; margin: 7px 0; }
+
+    /* ── Route panel ── */
+    #route-panel {
+      position: fixed; bottom: 20px; right: 12px; z-index: 900;
+      background: white; border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.18);
+      padding: 14px 16px; font-size: 12px; width: 290px; display: none;
+    }
+    #route-panel h4 { font-size: 13px; font-weight: 600; margin-bottom: 10px; }
+    .rp-table { width: 100%; border-collapse: collapse; }
+    .rp-table td { padding: 4px 0; vertical-align: top; }
+    .rp-table td:first-child { color: #888; width: 90px; }
+    .rp-table td:nth-child(2) { color: #2471a3; font-weight: 500; width: 95px; }
+    .rp-table td:nth-child(3) { color: #7d3c98; font-weight: 500; }
+    .rp-header { color: #888 !important; font-size: 11px !important; font-weight: 700 !important;
+                 text-transform: uppercase; letter-spacing: 0.04em; }
+    .rp-divider { height: 1px; background: #f0f0f0; margin: 8px 0; }
+    .bar-wrap { height: 7px; border-radius: 4px; overflow: hidden; display: flex; margin-top: 6px; }
+    .bar-label { font-size: 10px; color: #aaa; margin-top: 3px; margin-bottom: 6px; }
+    #sim-btn { width: 100%; margin-top: 10px; padding: 8px; font-size: 13px; }
+    .detour-positive { color: #e67e22; }
+    .detour-zero     { color: #27ae60; }
+
+    /* ── Upcoming banner ── */
+    #upcoming {
+      position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+      z-index: 900; background: white; border-radius: 24px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.18);
+      padding: 9px 22px; font-size: 13px; font-weight: 500;
+      border-left: 5px solid #ccc;
+      display: none; white-space: nowrap; max-width: 420px;
+    }
+
+    /* ── Loading overlay ── */
+    #loading {
+      position: fixed; inset: 0; z-index: 2000;
+      background: rgba(255,255,255,0.75);
+      display: none; align-items: center; justify-content: center;
+      font-size: 14px; color: #555; gap: 10px;
+    }
+    .spinner {
+      width: 22px; height: 22px;
+      border: 3px solid #ddd; border-top-color: #2471a3;
+      border-radius: 50%; animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .leaflet-tooltip { font-size: 12px; }
+  </style>
+</head>
+<body>
+
+<!-- Top bar -->
+<div id="topbar">
+  <div id="topbar-row1">
+    <span id="topbar-title">🗺 Quality Navigation</span>
+    <span id="status">Loading quality data…</span>
+    <button class="btn btn-ghost" onclick="useGPS()">📍 My location</button>
+    <button class="btn btn-red" onclick="clearAll()">✕ Clear</button>
+  </div>
+  <div id="topbar-row2">
+    <!-- Start search -->
+    <div class="search-wrap" id="start-wrap">
+      <div class="search-box">
+        <div class="search-dot" style="background:#27ae60"></div>
+        <input id="start-input" class="search-input"
+               placeholder="Start — type address or click map"
+               autocomplete="off"
+               oninput="onSearchInput('start', this.value)"
+               onfocus="onSearchFocus('start')"
+               onkeydown="onSearchKey(event,'start')"/>
+        <button class="search-clear" id="start-clear" onclick="clearField('start')">✕</button>
+      </div>
+      <div class="dropdown" id="start-dropdown"></div>
+    </div>
+    <!-- End search -->
+    <div class="search-wrap" id="end-wrap">
+      <div class="search-box">
+        <div class="search-dot" style="background:#e74c3c"></div>
+        <input id="end-input" class="search-input"
+               placeholder="Destination — type address or click map"
+               autocomplete="off"
+               oninput="onSearchInput('end', this.value)"
+               onfocus="onSearchFocus('end')"
+               onkeydown="onSearchKey(event,'end')"/>
+        <button class="search-clear" id="end-clear" onclick="clearField('end')">✕</button>
+      </div>
+      <div class="dropdown" id="end-dropdown"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Map -->
+<div id="map"></div>
+
+<!-- Instruction pill -->
+<div id="instruction">Click the map or type an address to set your start point</div>
+
+<!-- Legend -->
+<div id="legend">
+  <h4>Road Quality</h4>
+  <div class="leg-row"><div class="leg-swatch" style="background:#d73027"></div><span class="leg-label">Poor</span></div>
+  <div class="leg-row"><div class="leg-swatch" style="background:#f4a11d"></div><span class="leg-label">Fair</span></div>
+  <div class="leg-row"><div class="leg-swatch" style="background:#a8c92e"></div><span class="leg-label">Good</span></div>
+  <div class="leg-row"><div class="leg-swatch" style="background:#1a9850"></div><span class="leg-label">Excellent</span></div>
+  <hr class="leg-divider">
+  <div class="leg-row"><div class="leg-dashed"></div><span class="leg-label">Shortest</span></div>
+  <div class="leg-row"><div class="leg-swatch" style="background:#7d3c98"></div><span class="leg-label">Smoothest</span></div>
+</div>
+
+<!-- Route comparison panel -->
+<div id="route-panel">
+  <h4>Route Comparison</h4>
+  <table class="rp-table">
+    <tr><td></td><td class="rp-header">Shortest</td><td class="rp-header">Smoothest</td></tr>
+  </table>
+  <div class="rp-divider"></div>
+  <table class="rp-table">
+    <tr><td>Distance</td>    <td id="s-dist">—</td>  <td id="q-dist">—</td></tr>
+    <tr><td>Quality score</td><td id="s-score">—</td><td id="q-score">—</td></tr>
+    <tr><td>Rated roads</td> <td id="s-rated">—</td> <td id="q-rated">—</td></tr>
+  </table>
+  <div class="rp-divider"></div>
+  <div style="color:#888; font-size:11px;">Extra distance for smoother route</div>
+  <div id="detour" style="font-size:13px; font-weight:600; margin-top:2px;">—</div>
+  <div class="bar-wrap" id="bar-short"></div>
+  <div class="bar-label">Shortest — quality breakdown by distance</div>
+  <div class="bar-wrap" id="bar-smooth"></div>
+  <div class="bar-label">Smoothest — quality breakdown by distance</div>
+  <button class="btn btn-purple" id="sim-btn" onclick="startSim()">▶ Simulate Drive</button>
+</div>
+
+<!-- Upcoming road quality banner -->
+<div id="upcoming"></div>
+
+<!-- Loading overlay -->
+<div id="loading"><div class="spinner"></div> Computing routes…</div>
+
+<script>
+// ── Config ────────────────────────────────────────────────────────────────────
+const CENTRE      = {{ centre | tojson }};
+const NOMINATIM   = 'https://nominatim.openstreetmap.org/search';
+const VIEWBOX     = '76.75,8.25,77.25,8.85';   // bias results to Kerala data area
+const QUALITY_COLOUR = {
+  Poor: '#d73027', Fair: '#f4a11d', Good: '#a8c92e', Excellent: '#1a9850', Bad: '#d73027'
+};
+const SIM_SPEED_MPS = 400;   // fast-forward: ~15 km route in ~38 s
+const SIM_TICK_MS   = 150;
+const LOOKAHEAD_M   = 600;
+
+// ── Map ───────────────────────────────────────────────────────────────────────
+const map = L.map('map', { zoomControl: true }).setView(CENTRE, 14);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+  attribution: '© CartoDB © OpenStreetMap', maxZoom: 19
+}).addTo(map);
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let startLL = null, endLL = null, routeData = null;
+let qualityLayer = null, shortLine = null, smoothLine = null;
+let startMark = null, endMark = null, posMark = null;
+let sim = { active: false, timer: null, dist: 0, coordCum: [], edgeCum: [], coords: [], edges: [], totalDist: 0 };
+
+const searchTimers  = { start: null, end: null };
+const searchResults = { start: [],   end: [] };
+
+// ── Icons ─────────────────────────────────────────────────────────────────────
+const mkIcon = c => L.divIcon({
+  html: `<div style="background:${c};width:13px;height:13px;border-radius:50%;border:2.5px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.4)"></div>`,
+  className: '', iconAnchor: [6, 6]
+});
+const startIcon = mkIcon('#27ae60');
+const endIcon   = mkIcon('#e74c3c');
+const posIcon   = mkIcon('#2471a3');
+
+// ── Quality layer ─────────────────────────────────────────────────────────────
+fetch('/api/quality')
+  .then(r => r.json())
+  .then(data => {
+    qualityLayer = L.geoJSON(data, {
+      style: f => ({ color: f.properties.colour, weight: f.properties.weight, opacity: 0.75 }),
+      onEachFeature: (f, layer) => {
+        const p = f.properties;
+        layer.bindTooltip(
+          `<b>${p.name}</b><br>Quality: <b style="color:${p.colour}">${p.quality}</b><br>` +
+          `Score: ${p.score.toFixed(2)} · ${p.obs_count} observations`,
+          { sticky: true }
+        );
+      }
+    }).addTo(map);
+    setStatus('Type an address or click the map to set your start point');
+  })
+  .catch(() => setStatus('Failed to load quality data'));
+
+// ── Map click — start first, then end ─────────────────────────────────────────
+map.on('click', e => {
+  if (!startLL) setStart(e.latlng);
+  else          setEnd(e.latlng);
+});
+
+// ── Setters ───────────────────────────────────────────────────────────────────
+function setStart(latlng, label) {
+  startLL = latlng;
+  if (startMark) startMark.remove();
+  startMark = L.marker(latlng, { icon: startIcon }).addTo(map).bindTooltip('Start');
+  setFieldValue('start', label || coordLabel(latlng));
+  el('instruction').textContent = 'Now set your destination — type an address or click the map';
+  maybeRoute();
+}
+
+function setEnd(latlng, label) {
+  endLL = latlng;
+  if (endMark) endMark.remove();
+  endMark = L.marker(latlng, { icon: endIcon }).addTo(map).bindTooltip('Destination');
+  setFieldValue('end', label || coordLabel(latlng));
+  el('instruction').style.display = 'none';
+  maybeRoute();
+}
+
+function coordLabel(ll) {
+  return `${ll.lat.toFixed(5)}, ${ll.lng.toFixed(5)}`;
+}
+
+function setFieldValue(which, text) {
+  const input = el(`${which}-input`);
+  input.value = text;
+  el(`${which}-clear`).classList.toggle('visible', text.length > 0);
+}
+
+function maybeRoute() {
+  if (startLL && endLL) computeRoute();
+}
+
+// ── GPS ───────────────────────────────────────────────────────────────────────
+function useGPS() {
+  if (!navigator.geolocation) { alert('Geolocation not supported.'); return; }
+  setStatus('Getting GPS position…');
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      const ll = L.latLng(pos.coords.latitude, pos.coords.longitude);
+      setStart(ll, 'My location');
+      map.setView(ll, 15);
+      setStatus('GPS set as start — add your destination');
+    },
+    () => setStatus('GPS unavailable — click map or type address to set start'),
+    { enableHighAccuracy: true, timeout: 8000 }
+  );
+}
+
+// ── Address search (Nominatim) ────────────────────────────────────────────────
+function onSearchInput(which, value) {
+  el(`${which}-clear`).classList.toggle('visible', value.length > 0);
+  clearTimeout(searchTimers[which]);
+  if (value.length < 3) { hideDropdown(which); return; }
+  showDropdownSearching(which);
+  searchTimers[which] = setTimeout(() => doSearch(which, value), 400);
+}
+
+function onSearchFocus(which) {
+  const v = el(`${which}-input`).value;
+  if (v.length >= 3 && searchResults[which].length > 0) showDropdown(which);
+}
+
+function onSearchKey(e, which) {
+  if (e.key === 'Enter') {
+    const v = el(`${which}-input`).value;
+    if (v.length >= 3) { clearTimeout(searchTimers[which]); doSearch(which, v); }
+  }
+  if (e.key === 'Escape') hideDropdown(which);
+}
+
+async function doSearch(which, query) {
+  try {
+    const params = new URLSearchParams({
+      q: query, format: 'json', limit: 5,
+      viewbox: VIEWBOX, bounded: 0, addressdetails: 1,
+    });
+    const res = await fetch(`${NOMINATIM}?${params}`, {
+      headers: { 'Accept-Language': 'en' }
+    });
+    const results = await res.json();
+    searchResults[which] = results;
+    showDropdown(which);
+  } catch {
+    showDropdownMessage(which, 'Search unavailable — check connection');
+  }
+}
+
+function showDropdown(which) {
+  const results = searchResults[which];
+  const dd = el(`${which}-dropdown`);
+  if (!results || results.length === 0) {
+    dd.innerHTML = '<div class="dd-item dd-empty">No results found</div>';
+  } else {
+    dd.innerHTML = results.map((r, i) => {
+      const parts = r.display_name.split(',');
+      const name   = parts.slice(0, 2).join(',').trim();
+      const detail = parts.slice(2).join(',').trim();
+      return `<div class="dd-item" onclick="selectResult('${which}', ${i})">
+                <div class="dd-name">${name}</div>
+                <div class="dd-detail">${detail}</div>
+              </div>`;
+    }).join('');
+  }
+  dd.style.display = 'block';
+}
+
+function showDropdownSearching(which) {
+  const dd = el(`${which}-dropdown`);
+  dd.innerHTML = '<div class="dd-item dd-searching">Searching…</div>';
+  dd.style.display = 'block';
+}
+
+function showDropdownMessage(which, msg) {
+  const dd = el(`${which}-dropdown`);
+  dd.innerHTML = `<div class="dd-item dd-empty">${msg}</div>`;
+  dd.style.display = 'block';
+}
+
+function hideDropdown(which) {
+  el(`${which}-dropdown`).style.display = 'none';
+}
+
+function selectResult(which, idx) {
+  const r  = searchResults[which][idx];
+  const ll = L.latLng(parseFloat(r.lat), parseFloat(r.lon));
+  const parts = r.display_name.split(',');
+  const label = parts.slice(0, 2).join(',').trim();
+  hideDropdown(which);
+  if (which === 'start') { setStart(ll, label); map.setView(ll, 15); }
+  else                   { setEnd(ll, label);   map.setView(ll, 15); }
+}
+
+function clearField(which) {
+  setFieldValue(which, '');
+  hideDropdown(which);
+  searchResults[which] = [];
+  if (which === 'start') { if (startMark) startMark.remove(); startMark = null; startLL = null; }
+  else                   { if (endMark)   endMark.remove();   endMark   = null; endLL   = null; }
+  el(`${which}-input`).focus();
+}
+
+// Close dropdowns when clicking outside
+document.addEventListener('click', e => {
+  if (!e.target.closest('#start-wrap')) hideDropdown('start');
+  if (!e.target.closest('#end-wrap'))   hideDropdown('end');
+});
+
+// ── Clear all ─────────────────────────────────────────────────────────────────
+function clearAll() {
+  stopSim();
+  [startMark, endMark, posMark, shortLine, smoothLine].forEach(l => l && l.remove());
+  startMark = endMark = posMark = shortLine = smoothLine = null;
+  startLL = endLL = null; routeData = null;
+  setFieldValue('start', ''); setFieldValue('end', '');
+  searchResults.start = []; searchResults.end = [];
+  hideDropdown('start'); hideDropdown('end');
+  el('route-panel').style.display = 'none';
+  el('upcoming').style.display = 'none';
+  el('instruction').textContent = 'Click the map or type an address to set your start point';
+  el('instruction').style.display = '';
+  setStatus('Type an address or click the map to set your start point');
+}
+
+// ── Route computation ─────────────────────────────────────────────────────────
+function computeRoute() {
+  el('loading').style.display = 'flex';
+  setStatus('Computing routes…');
+  fetch('/api/route', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ start: [startLL.lat, startLL.lng], end: [endLL.lat, endLL.lng] }),
+  })
+    .then(r => r.json())
+    .then(data => {
+      el('loading').style.display = 'none';
+      if (data.error) { setStatus('Routing error: ' + data.error); return; }
+      routeData = data;
+      displayRoutes(data);
+      updatePanel(data);
+      setStatus('Routes ready — compare in the panel or hit Simulate Drive');
+    })
+    .catch(() => { el('loading').style.display = 'none'; setStatus('Server error'); });
+}
+
+// ── Display routes ────────────────────────────────────────────────────────────
+function displayRoutes(data) {
+  if (shortLine)  shortLine.remove();
+  if (smoothLine) smoothLine.remove();
+  shortLine = L.polyline(data.shortest.coords, {
+    color: '#2471a3', weight: 5, opacity: 0.9, dashArray: '10 6'
+  }).addTo(map).bindTooltip(`Shortest: ${fmtDist(data.shortest.stats.distance_m)}`);
+  smoothLine = L.polyline(data.smoothest.coords, {
+    color: '#7d3c98', weight: 5, opacity: 0.9
+  }).addTo(map).bindTooltip(`Smoothest: ${fmtDist(data.smoothest.stats.distance_m)}`);
+  map.fitBounds(
+    L.latLngBounds([...data.shortest.coords, ...data.smoothest.coords]),
+    { padding: [60, 60] }
+  );
+}
+
+// ── Route panel ───────────────────────────────────────────────────────────────
+function fmtDist(m) { return m >= 1000 ? `${(m/1000).toFixed(2)} km` : `${m} m`; }
+
+function scoreLabel(s) {
+  if (s == null) return '—';
+  if (s >= 3.5) return `${s.toFixed(2)} Excellent`;
+  if (s >= 2.5) return `${s.toFixed(2)} Good`;
+  if (s >= 1.5) return `${s.toFixed(2)} Fair`;
+  return `${s.toFixed(2)} Poor`;
+}
+
+function updatePanel(data) {
+  const ss = data.shortest.stats, qs = data.smoothest.stats;
+  el('s-dist').textContent  = fmtDist(ss.distance_m);
+  el('q-dist').textContent  = fmtDist(qs.distance_m);
+  el('s-score').textContent = scoreLabel(ss.avg_score);
+  el('q-score').textContent = scoreLabel(qs.avg_score);
+  el('s-rated').textContent = ss.rated_pct + '%';
+  el('q-rated').textContent = qs.rated_pct + '%';
+
+  const extra = qs.distance_m - ss.distance_m;
+  const pct   = (100 * extra / Math.max(ss.distance_m, 1)).toFixed(1);
+  const detourEl = el('detour');
+  if (extra > 10) { detourEl.textContent = `+${fmtDist(extra)}  (+${pct}%)`; detourEl.className = 'detour-positive'; }
+  else            { detourEl.textContent = 'No detour needed';               detourEl.className = 'detour-zero'; }
+
+  renderBar('bar-short',  ss.label_dist, ss.distance_m);
+  renderBar('bar-smooth', qs.label_dist, qs.distance_m);
+  el('route-panel').style.display = 'block';
+}
+
+function renderBar(id, labelDist, total) {
+  el(id).innerHTML = ['Poor','Bad','Fair','Good','Excellent'].map(lbl => {
+    const d = labelDist[lbl] || 0;
+    if (!d) return '';
+    return `<div style="width:${100*d/Math.max(total,1)}%;background:${QUALITY_COLOUR[lbl]||'#ccc'}" title="${lbl}: ${fmtDist(d)}"></div>`;
+  }).join('');
+}
+
+// ── Simulation ────────────────────────────────────────────────────────────────
+function haversine(a, b) {
+  const R = 6371000, r = d => d * Math.PI / 180;
+  const dL = r(b[0]-a[0]), dO = r(b[1]-a[1]);
+  return 2*R*Math.asin(Math.sqrt(Math.sin(dL/2)**2 + Math.cos(r(a[0]))*Math.cos(r(b[0]))*Math.sin(dO/2)**2));
+}
+
+function buildCoordCum(coords) {
+  const c = [0];
+  for (let i = 1; i < coords.length; i++) c.push(c[i-1] + haversine(coords[i-1], coords[i]));
+  return c;
+}
+
+function buildEdgeCum(edges) {
+  const c = []; let t = 0;
+  for (const e of edges) { t += e.length; c.push(t); }
+  return c;
+}
+
+function interpPos(cumD, coords, d) {
+  let lo = 0, hi = cumD.length - 1;
+  while (lo < hi - 1) { const m = (lo+hi)>>1; if (cumD[m] <= d) lo = m; else hi = m; }
+  if (lo >= coords.length - 1) return coords[coords.length - 1];
+  const t = (cumD[lo+1]-cumD[lo]) > 0 ? (d-cumD[lo])/(cumD[lo+1]-cumD[lo]) : 0;
+  return [coords[lo][0]+t*(coords[lo+1][0]-coords[lo][0]),
+          coords[lo][1]+t*(coords[lo+1][1]-coords[lo][1])];
+}
+
+function upcomingQuality(edgeCum, edges, dist) {
+  let worst = null, worstSc = 999;
+  const sc = { Poor:0, Bad:0, Fair:1, Good:2, Excellent:3 };
+  for (let i = 0; i < edges.length; i++) {
+    const eS = i > 0 ? edgeCum[i-1] : 0, eE = edgeCum[i];
+    if (eE <= dist) continue;
+    if (eS > dist + LOOKAHEAD_M) break;
+    const e = edges[i];
+    if (!e.quality) continue;
+    const s = sc[e.quality] ?? 99;
+    if (s < worstSc) { worstSc = s; worst = e; }
+  }
+  return worst;
+}
+
+function startSim() {
+  if (!routeData) return;
+  stopSim();
+  const route    = routeData.smoothest;
+  sim.coords     = route.coords;
+  sim.edges      = route.edges;
+  sim.dist       = 0;
+  sim.coordCum   = buildCoordCum(route.coords);
+  sim.edgeCum    = buildEdgeCum(route.edges);
+  sim.totalDist  = sim.coordCum[sim.coordCum.length - 1];
+  sim.active     = true;
+
+  if (posMark) posMark.remove();
+  posMark = L.marker(sim.coords[0], { icon: posIcon, zIndexOffset: 200 }).addTo(map);
+
+  el('sim-btn').textContent = '⏹ Stop';
+  el('sim-btn').onclick     = stopSim;
+  el('upcoming').style.display = 'block';
+
+  sim.timer = setInterval(() => {
+    sim.dist += SIM_SPEED_MPS * SIM_TICK_MS / 1000;
+    if (sim.dist >= sim.totalDist) {
+      stopSim();
+      el('upcoming').style.display = 'block';
+      el('upcoming').innerHTML = '🏁 Destination reached';
+      el('upcoming').style.borderLeftColor = '#27ae60';
+      return;
+    }
+    const pos = interpPos(sim.coordCum, sim.coords, sim.dist);
+    posMark.setLatLng(pos);
+    map.panTo(pos, { animate: true, duration: 0.15 });
+    updateUpcoming(upcomingQuality(sim.edgeCum, sim.edges, sim.dist), sim.totalDist - sim.dist);
+  }, SIM_TICK_MS);
+}
+
+function stopSim() {
+  if (sim.timer) { clearInterval(sim.timer); sim.timer = null; }
+  sim.active = false;
+  el('sim-btn').textContent = '▶ Simulate Drive';
+  el('sim-btn').onclick     = startSim;
+  el('upcoming').style.display = 'none';
+}
+
+function updateUpcoming(worst, remaining) {
+  const banner = el('upcoming');
+  const col = worst ? (QUALITY_COLOUR[worst.quality] || '#999') : '#27ae60';
+  banner.style.borderLeftColor = col;
+  if (!worst) {
+    banner.innerHTML = `<span style="color:#27ae60">✓ No rated road changes ahead</span>  ·  ${fmtDist(Math.round(remaining))} remaining`;
+    return;
+  }
+  const name = worst.name && worst.name !== 'Unnamed road'
+    ? ` <span style="color:#888;font-weight:400">(${worst.name})</span>` : '';
+  banner.innerHTML =
+    `Upcoming: <b style="color:${col}">${worst.quality}</b> road${name}` +
+    `  ·  ${fmtDist(Math.round(remaining))} remaining`;
+}
+
+// ── Utils ─────────────────────────────────────────────────────────────────────
+function el(id) { return document.getElementById(id); }
+function setStatus(msg) { el('status').textContent = msg; }
+</script>
+</body>
+</html>
